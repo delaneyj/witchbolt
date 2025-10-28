@@ -5,37 +5,92 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-
 	"github.com/delaneyj/witchbolt/internal/common"
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
 	"github.com/delaneyj/witchbolt/internal/surgeon"
 )
 
-func newSurgeryCommand() *cobra.Command {
-	surgeryCmd := &cobra.Command{
-		Use:   "surgery <subcommand>",
-		Short: "surgery related commands",
+type SurgeryCmd struct {
+	RevertMetaPage    SurgeryRevertMetaPageCmd    `cmd:"" help:"Revert the meta page to undo the latest transaction."`
+	CopyPage          SurgeryCopyPageCmd          `cmd:"" help:"Copy a page to another page."`
+	ClearPage         SurgeryClearPageCmd         `cmd:"" help:"Clear all elements from a page."`
+	ClearPageElements SurgeryClearPageElementsCmd `cmd:"" help:"Clear a range of elements from a page."`
+	Freelist          SurgeryFreelistCmd          `cmd:"" help:"Freelist related surgery commands."`
+	Meta              SurgeryMetaCmd              `cmd:"" help:"Meta page related surgery commands."`
+}
+
+type SurgeryRevertMetaPageCmd struct {
+	Src    string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output string `name:"output" required:"" help:"Path to the output database file" type:"path"`
+}
+
+func (c *SurgeryRevertMetaPageCmd) Run() error {
+	cfg := surgeryBaseOptions{outputDBFilePath: c.Output}
+	if err := cfg.Validate(); err != nil {
+		return err
 	}
+	return surgeryRevertMetaPageFunc(c.Src, cfg)
+}
 
-	surgeryCmd.AddCommand(newSurgeryRevertMetaPageCommand())
-	surgeryCmd.AddCommand(newSurgeryCopyPageCommand())
-	surgeryCmd.AddCommand(newSurgeryClearPageCommand())
-	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
-	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
-	surgeryCmd.AddCommand(newSurgeryMetaCommand())
+type SurgeryCopyPageCmd struct {
+	Src      string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output   string `name:"output" required:"" help:"Path to the output database file" type:"path"`
+	FromPage uint64 `name:"from-page" required:"" help:"Source page ID"`
+	ToPage   uint64 `name:"to-page" required:"" help:"Destination page ID"`
+}
 
-	return surgeryCmd
+func (c *SurgeryCopyPageCmd) Run() error {
+	cfg := surgeryCopyPageOptions{
+		surgeryBaseOptions: surgeryBaseOptions{outputDBFilePath: c.Output},
+		sourcePageId:       c.FromPage,
+		destinationPageId:  c.ToPage,
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return surgeryCopyPageFunc(c.Src, cfg)
+}
+
+type SurgeryClearPageCmd struct {
+	Src    string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output string `name:"output" required:"" help:"Path to the output database file" type:"path"`
+	PageID uint64 `name:"pageId" required:"" help:"Page ID to clear"`
+}
+
+func (c *SurgeryClearPageCmd) Run() error {
+	cfg := surgeryClearPageOptions{
+		surgeryBaseOptions: surgeryBaseOptions{outputDBFilePath: c.Output},
+		pageId:             c.PageID,
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return surgeryClearPageFunc(c.Src, cfg)
+}
+
+type SurgeryClearPageElementsCmd struct {
+	Src       string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output    string `name:"output" required:"" help:"Path to the output database file" type:"path"`
+	PageID    uint64 `name:"pageId" required:"" help:"Page ID to modify"`
+	FromIndex int    `name:"from-index" required:"" help:"Start element index (inclusive)."`
+	ToIndex   int    `name:"to-index" required:"" help:"End element index (exclusive). Use -1 for the end of page."`
+}
+
+func (c *SurgeryClearPageElementsCmd) Run() error {
+	cfg := surgeryClearPageElementsOptions{
+		surgeryBaseOptions: surgeryBaseOptions{outputDBFilePath: c.Output},
+		pageId:             c.PageID,
+		startElementIdx:    c.FromIndex,
+		endElementIdx:      c.ToIndex,
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return surgeryClearPageElementFunc(c.Src, cfg)
 }
 
 type surgeryBaseOptions struct {
 	outputDBFilePath string
-}
-
-func (o *surgeryBaseOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.outputDBFilePath, "output", o.outputDBFilePath, "path to the filePath db file")
-	_ = cobra.MarkFlagRequired(fs, "output")
 }
 
 func (o *surgeryBaseOptions) Validate() error {
@@ -43,23 +98,6 @@ func (o *surgeryBaseOptions) Validate() error {
 		return errors.New("output database path wasn't given, specify output database file path with --output option")
 	}
 	return nil
-}
-
-func newSurgeryRevertMetaPageCommand() *cobra.Command {
-	var o surgeryBaseOptions
-	revertMetaPageCmd := &cobra.Command{
-		Use:   "revert-meta-page <witchbolt-file>",
-		Short: "Revert the meta page to revert the changes performed by the latest transaction",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryRevertMetaPageFunc(args[0], o)
-		},
-	}
-	o.AddFlags(revertMetaPageCmd.Flags())
-	return revertMetaPageCmd
 }
 
 func surgeryRevertMetaPageFunc(srcDBPath string, cfg surgeryBaseOptions) error {
@@ -86,14 +124,6 @@ type surgeryCopyPageOptions struct {
 	destinationPageId uint64
 }
 
-func (o *surgeryCopyPageOptions) AddFlags(fs *pflag.FlagSet) {
-	o.surgeryBaseOptions.AddFlags(fs)
-	fs.Uint64VarP(&o.sourcePageId, "from-page", "", o.sourcePageId, "source page Id")
-	fs.Uint64VarP(&o.destinationPageId, "to-page", "", o.destinationPageId, "destination page Id")
-	_ = cobra.MarkFlagRequired(fs, "from-page")
-	_ = cobra.MarkFlagRequired(fs, "to-page")
-}
-
 func (o *surgeryCopyPageOptions) Validate() error {
 	if err := o.surgeryBaseOptions.Validate(); err != nil {
 		return err
@@ -102,23 +132,6 @@ func (o *surgeryCopyPageOptions) Validate() error {
 		return fmt.Errorf("'--from-page' and '--to-page' have the same value: %d", o.sourcePageId)
 	}
 	return nil
-}
-
-func newSurgeryCopyPageCommand() *cobra.Command {
-	var o surgeryCopyPageOptions
-	copyPageCmd := &cobra.Command{
-		Use:   "copy-page <witchbolt-file>",
-		Short: "Copy page from the source page Id to the destination page Id",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryCopyPageFunc(args[0], o)
-		},
-	}
-	o.AddFlags(copyPageCmd.Flags())
-	return copyPageCmd
 }
 
 func surgeryCopyPageFunc(srcDBPath string, cfg surgeryCopyPageOptions) error {
@@ -152,12 +165,6 @@ type surgeryClearPageOptions struct {
 	pageId uint64
 }
 
-func (o *surgeryClearPageOptions) AddFlags(fs *pflag.FlagSet) {
-	o.surgeryBaseOptions.AddFlags(fs)
-	fs.Uint64VarP(&o.pageId, "pageId", "", o.pageId, "page Id")
-	_ = cobra.MarkFlagRequired(fs, "pageId")
-}
-
 func (o *surgeryClearPageOptions) Validate() error {
 	if err := o.surgeryBaseOptions.Validate(); err != nil {
 		return err
@@ -166,23 +173,6 @@ func (o *surgeryClearPageOptions) Validate() error {
 		return fmt.Errorf("the pageId must be at least 2, but got %d", o.pageId)
 	}
 	return nil
-}
-
-func newSurgeryClearPageCommand() *cobra.Command {
-	var o surgeryClearPageOptions
-	clearPageCmd := &cobra.Command{
-		Use:   "clear-page <witchbolt-file>",
-		Short: "Clears all elements from the given page, which can be a branch or leaf page",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryClearPageFunc(args[0], o)
-		},
-	}
-	o.AddFlags(clearPageCmd.Flags())
-	return clearPageCmd
 }
 
 func surgeryClearPageFunc(srcDBPath string, cfg surgeryClearPageOptions) error {
@@ -215,16 +205,6 @@ type surgeryClearPageElementsOptions struct {
 	endElementIdx   int
 }
 
-func (o *surgeryClearPageElementsOptions) AddFlags(fs *pflag.FlagSet) {
-	o.surgeryBaseOptions.AddFlags(fs)
-	fs.Uint64VarP(&o.pageId, "pageId", "", o.pageId, "page id")
-	fs.IntVarP(&o.startElementIdx, "from-index", "", o.startElementIdx, "start element index (included) to clear, starting from 0")
-	fs.IntVarP(&o.endElementIdx, "to-index", "", o.endElementIdx, "end element index (excluded) to clear, starting from 0, -1 means to the end of page")
-	_ = cobra.MarkFlagRequired(fs, "pageId")
-	_ = cobra.MarkFlagRequired(fs, "from-index")
-	_ = cobra.MarkFlagRequired(fs, "to-index")
-}
-
 func (o *surgeryClearPageElementsOptions) Validate() error {
 	if err := o.surgeryBaseOptions.Validate(); err != nil {
 		return err
@@ -233,23 +213,6 @@ func (o *surgeryClearPageElementsOptions) Validate() error {
 		return fmt.Errorf("the pageId must be at least 2, but got %d", o.pageId)
 	}
 	return nil
-}
-
-func newSurgeryClearPageElementsCommand() *cobra.Command {
-	var o surgeryClearPageElementsOptions
-	clearElementCmd := &cobra.Command{
-		Use:   "clear-page-elements <witchbolt-file>",
-		Short: "Clears elements from the given page, which can be a branch or leaf page",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryClearPageElementFunc(args[0], o)
-		},
-	}
-	o.AddFlags(clearElementCmd.Flags())
-	return clearElementCmd
 }
 
 func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsOptions) error {

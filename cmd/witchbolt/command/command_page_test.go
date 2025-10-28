@@ -1,8 +1,6 @@
 package command_test
 
 import (
-	"bytes"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,14 +31,9 @@ func TestPageCommand_Run(t *testing.T) {
 		"Checksum:   07516e114689fdee\n\n"
 
 	t.Log("Running page command")
-	rootCmd := command.NewRootCommand()
-	outBuf := &bytes.Buffer{}
-	rootCmd.SetOut(outBuf)
-	rootCmd.SetArgs([]string{"page", db.Path(), "0"})
-
-	err := rootCmd.Execute()
-	require.NoError(t, err)
-	require.Equal(t, exp, outBuf.String(), "unexpected stdout")
+	res := runCLI(t, "page", db.Path(), "0")
+	require.NoError(t, res.err)
+	require.Equal(t, exp, res.stdout, "unexpected stdout")
 }
 
 func TestPageCommand_ExclusiveArgs(t *testing.T) {
@@ -79,21 +72,26 @@ func TestPageCommand_ExclusiveArgs(t *testing.T) {
 			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 			t.Log("Running page command")
-			rootCmd := command.NewRootCommand()
-			outBuf := &bytes.Buffer{}
-			rootCmd.SetOut(outBuf)
-			rootCmd.SetArgs([]string{"page", db.Path(), tc.pageIds, tc.allFlag})
+			args := []string{"page", db.Path()}
+			if tc.pageIds != "" {
+				args = append(args, tc.pageIds)
+			}
+			if tc.allFlag != "" {
+				args = append(args, tc.allFlag)
+			}
 
-			err := rootCmd.Execute()
-			require.Equal(t, tc.expErr, err)
+			res := runCLI(t, args...)
+			if tc.expErr != nil {
+				require.ErrorIs(t, res.err, tc.expErr)
+			} else {
+				require.NoError(t, res.err)
+			}
 		})
 	}
 }
 
 func TestPageCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("requires at least 1 arg(s), only received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"page"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "page")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path>\"")
 }

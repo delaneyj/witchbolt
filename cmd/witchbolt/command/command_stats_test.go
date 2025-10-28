@@ -1,9 +1,6 @@
 package command_test
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"os"
 	"strconv"
 	"testing"
@@ -11,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -48,18 +44,9 @@ func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 		"\tBytes used for inlined buckets: 0 (0%)\n"
 
 	t.Log("Running stats cmd")
-	rootCmd := command.NewRootCommand()
-	outputBuf := bytes.NewBufferString("")
-	rootCmd.SetOut(outputBuf)
-
-	rootCmd.SetArgs([]string{"stats", db.Path()})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
-
-	t.Log("Checking output")
-	output, err := io.ReadAll(outputBuf)
-	require.NoError(t, err)
-	require.Exactlyf(t, exp, string(output), "unexpected stdout:\n\n%s", string(output))
+	res := runCLI(t, "stats", db.Path())
+	require.NoError(t, res.err)
+	require.Exactlyf(t, exp, res.stdout, "unexpected stdout:\n\n%s", res.stdout)
 }
 
 // Ensure the "stats" command can execute correctly.
@@ -131,24 +118,13 @@ func TestStatsCommand_Run(t *testing.T) {
 		"\tBytes used for inlined buckets: 236 (11%)\n"
 
 	t.Log("Running stats cmd")
-	rootCmd := command.NewRootCommand()
-	outputBuf := bytes.NewBufferString("")
-	rootCmd.SetOut(outputBuf)
-
-	rootCmd.SetArgs([]string{"stats", db.Path()})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
-
-	t.Log("Checking output")
-	output, err := io.ReadAll(outputBuf)
-	require.NoError(t, err)
-	require.Exactlyf(t, exp, string(output), "unexpected stdout:\n\n%s", string(output))
+	res := runCLI(t, "stats", db.Path())
+	require.NoError(t, res.err)
+	require.Exactlyf(t, exp, res.stdout, "unexpected stdout:\n\n%s", res.stdout)
 }
 
 func TestStatsCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("accepts between 1 and 2 arg(s), received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"stats"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "stats")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path>\"")
 }

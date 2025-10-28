@@ -1,9 +1,7 @@
 package command_test
 
 import (
-	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -11,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
@@ -82,15 +79,11 @@ func TestPageItemCommand_Run(t *testing.T) {
 			require.NotEqual(t, 0, leafPageId)
 
 			t.Log("Running page-item command")
-			rootCmd := command.NewRootCommand()
-			outBuf := &bytes.Buffer{}
-			rootCmd.SetOut(outBuf)
-			rootCmd.SetArgs([]string{"page-item", db.Path(), fmt.Sprintf("%d", leafPageId), tc.itemId})
-			err = rootCmd.Execute()
-			require.NoError(t, err)
+			res := runCLI(t, "page-item", db.Path(), fmt.Sprintf("%d", leafPageId), tc.itemId)
+			require.NoError(t, res.err)
 
 			t.Log("Checking output")
-			output := outBuf.String()
+			output := res.stdout
 			require.True(t, strings.Contains(output, tc.expectedKey), "unexpected output:", output)
 			require.True(t, strings.Contains(output, tc.expectedValue), "unexpected output:", output)
 		})
@@ -98,9 +91,7 @@ func TestPageItemCommand_Run(t *testing.T) {
 }
 
 func TestPageItemCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("accepts 3 arg(s), received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"page-item"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "page-item")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path> <page-id> <item-id>\"")
 }

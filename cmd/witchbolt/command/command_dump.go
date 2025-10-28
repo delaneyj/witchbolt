@@ -6,44 +6,34 @@ import (
 	"io"
 	"os"
 
-	"github.com/spf13/cobra"
-
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
-func newDumpCommand() *cobra.Command {
-	dumpCmd := &cobra.Command{
-		Use:   "dump <witchbolt-file> pageid [pageid...]",
-		Short: "prints a hexadecimal dump of one or more pages of witchbolt database.",
-		Args:  cobra.MinimumNArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath := args[0]
-			pageIDs, err := stringToPages(args[1:])
-			if err != nil {
-				return err
-			} else if len(pageIDs) == 0 {
-				return ErrPageIDRequired
-			}
-			return dumpFunc(cmd, dbPath, pageIDs)
-		},
-	}
-
-	return dumpCmd
+type DumpCmd struct {
+	Path    string   `arg:"" help:"Path to witchbolt database file" type:"path"`
+	PageIDs []string `arg:"" help:"Page IDs to dump (one or more)"`
 }
 
-func dumpFunc(cmd *cobra.Command, dbPath string, pageIDs []uint64) (err error) {
-	if _, err := checkSourceDBPath(dbPath); err != nil {
+func (c *DumpCmd) Run() error {
+	pageIDs, err := stringToPages(c.PageIDs)
+	if err != nil {
+		return err
+	} else if len(pageIDs) == 0 {
+		return ErrPageIDRequired
+	}
+
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
 	// open database to retrieve page size.
-	pageSize, _, err := guts_cli.ReadPageAndHWMSize(dbPath)
+	pageSize, _, err := guts_cli.ReadPageAndHWMSize(c.Path)
 	if err != nil {
 		return err
 	}
 
 	// open database file handler.
-	f, err := os.Open(dbPath)
+	f, err := os.Open(c.Path)
 	if err != nil {
 		return err
 	}
@@ -53,16 +43,16 @@ func dumpFunc(cmd *cobra.Command, dbPath string, pageIDs []uint64) (err error) {
 	for i, pageID := range pageIDs {
 		// print a separator.
 		if i > 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "===============================================")
+			fmt.Println("===============================================")
 		}
 
 		// print page to stdout.
-		if err := dumpPage(cmd.OutOrStdout(), f, pageID, uint64(pageSize)); err != nil {
+		if err := dumpPage(os.Stdout, f, pageID, uint64(pageSize)); err != nil {
 			return err
 		}
 	}
 
-	return
+	return nil
 }
 
 func dumpPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error {

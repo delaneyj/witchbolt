@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -18,10 +17,6 @@ func TestInspect(t *testing.T) {
 
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{
-		"inspect", srcPath,
-	})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
+	res := runCLI(t, "inspect", srcPath)
+	require.NoError(t, res.err)
 }

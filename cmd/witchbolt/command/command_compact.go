@@ -5,90 +5,55 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-
 	"github.com/delaneyj/witchbolt"
 )
 
-type compactOptions struct {
-	dstPath   string
-	txMaxSize int64
-	dstNoSync bool
+type CompactCmd struct {
+	Src       string `arg:"" help:"Source witchbolt database file" type:"path"`
+	Output    string `short:"o" required:"" help:"Destination database file" type:"path"`
+	TxMaxSize int64  `default:"65536" help:"Maximum transaction size"`
+	NoSync    bool   `help:"Disable fsync for destination database"`
 }
 
-func newCompactCommand() *cobra.Command {
-	var o compactOptions
-	var compactCmd = &cobra.Command{
-		Use:   "compact [options] -o <dst-witchbolt-file> <src-witchbolt-file>",
-		Short: "creates a compacted copy of the database from source path to the destination path, preserving the original.",
-		Long: `compact opens a database at source path and walks it recursively, copying keys
-as they are found from all buckets, to a newly created database at the destination path.
-The original database is left untouched.`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(args[0]); err != nil {
-				return err
-			}
-			return o.Run(cmd, args[0])
-		},
-	}
-	o.AddFlags(compactCmd.Flags())
-
-	return compactCmd
-}
-
-func (o *compactOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVarP(&o.dstPath, "output", "o", "", "")
-	fs.Int64Var(&o.txMaxSize, "tx-max-size", 65536, "")
-	fs.BoolVar(&o.dstNoSync, "no-sync", false, "")
-	_ = cobra.MarkFlagRequired(fs, "output")
-}
-
-func (o *compactOptions) Validate(srcPath string) (err error) {
-	if o.dstPath == "" {
+func (c *CompactCmd) Run() error {
+	if c.Output == "" {
 		return errors.New("output file required")
 	}
 
-	return
-}
-
-func (o *compactOptions) Run(cmd *cobra.Command, srcPath string) (err error) {
-
 	// ensure source file exists.
-	fi, err := checkSourceDBPath(srcPath)
+	fi, err := checkSourceDBPath(c.Src)
 	if err != nil {
 		return err
 	}
 	initialSize := fi.Size()
 
 	// open source database.
-	src, err := witchbolt.Open(srcPath, 0400, &witchbolt.Options{ReadOnly: true})
+	src, err := witchbolt.Open(c.Src, 0400, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
 	defer src.Close()
 
 	// open destination database.
-	dst, err := witchbolt.Open(o.dstPath, fi.Mode(), &witchbolt.Options{NoSync: o.dstNoSync})
+	dst, err := witchbolt.Open(c.Output, fi.Mode(), &witchbolt.Options{NoSync: c.NoSync})
 	if err != nil {
 		return err
 	}
 	defer dst.Close()
 
 	// run compaction.
-	if err := witchbolt.Compact(dst, src, o.txMaxSize); err != nil {
+	if err := witchbolt.Compact(dst, src, c.TxMaxSize); err != nil {
 		return err
 	}
 
 	// report stats on new size.
-	fi, err = os.Stat(o.dstPath)
+	fi, err = os.Stat(c.Output)
 	if err != nil {
 		return err
 	} else if fi.Size() == 0 {
 		return fmt.Errorf("zero db size")
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "%d -> %d bytes (gain=%.2fx)\n", initialSize, fi.Size(), float64(initialSize)/float64(fi.Size()))
+	fmt.Printf("%d -> %d bytes (gain=%.2fx)\n", initialSize, fi.Size(), float64(initialSize)/float64(fi.Size()))
 
-	return
+	return nil
 }

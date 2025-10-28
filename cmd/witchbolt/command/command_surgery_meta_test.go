@@ -22,12 +22,8 @@ func TestSurgery_Meta_Validate(t *testing.T) {
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 	// validate the meta pages
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{
-		"surgery", "meta", "validate", srcPath,
-	})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
+	res := runCLI(t, "surgery", "meta", "validate", srcPath)
+	require.NoError(t, res.err)
 
 	// TODD: add one more case that the validation may fail. We need to
 	// make the command output configurable, so that test cases can set
@@ -94,16 +90,14 @@ func TestSurgery_Meta_Update(t *testing.T) {
 					fields = append(fields, fmt.Sprintf("pgid:%d", tc.pgid))
 				}
 
-				rootCmd := command.NewRootCommand()
 				output := filepath.Join(t.TempDir(), "db")
-				rootCmd.SetArgs([]string{
+				res := runCLI(t,
 					"surgery", "meta", "update", srcPath,
 					"--output", output,
 					"--meta-page", fmt.Sprintf("%d", metaPageId),
 					"--fields", strings.Join(fields, ","),
-				})
-				err := rootCmd.Execute()
-				require.NoError(t, err)
+				)
+				require.NoError(t, res.err)
 
 				m, _, err := command.ReadMetaPageAt(output, metaPageId, 4096)
 				require.NoError(t, err)

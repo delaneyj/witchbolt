@@ -3,32 +3,20 @@ package command
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-
-	"github.com/spf13/cobra"
 
 	"github.com/delaneyj/witchbolt"
 )
 
-func newInspectCommand() *cobra.Command {
-	inspectCmd := &cobra.Command{
-		Use:   "inspect <witchbolt-file>",
-		Short: "inspect the structure of the database",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return inspectFunc(args[0])
-		},
-	}
-
-	return inspectCmd
+type InspectCmd struct {
+	Path string `arg:"" help:"Path to witchbolt database file" type:"path"`
 }
 
-func inspectFunc(srcDBPath string) error {
-	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+func (c *InspectCmd) Run() error {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
-	db, err := witchbolt.Open(srcDBPath, 0600, &witchbolt.Options{ReadOnly: true})
+	db, err := witchbolt.Open(c.Path, 0600, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -40,7 +28,7 @@ func inspectFunc(srcDBPath string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stdout, string(out))
+		fmt.Println(string(out))
 		return nil
 	})
 }

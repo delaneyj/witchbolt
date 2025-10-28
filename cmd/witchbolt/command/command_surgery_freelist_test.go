@@ -20,14 +20,9 @@ func TestSurgery_Freelist_Abandon(t *testing.T) {
 
 	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
 
-	rootCmd := command.NewRootCommand()
 	output := filepath.Join(t.TempDir(), "db")
-	rootCmd.SetArgs([]string{
-		"surgery", "freelist", "abandon", srcPath,
-		"--output", output,
-	})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
+	res := runCLI(t, "surgery", "freelist", "abandon", srcPath, "--output", output)
+	require.NoError(t, res.err)
 
 	meta0 := loadMetaPage(t, output, 0)
 	assert.Equal(t, common.PgidNoFreelist, meta0.Freelist())
@@ -82,21 +77,20 @@ func TestSurgery_Freelist_Rebuild(t *testing.T) {
 			}
 
 			// Execute `surgery freelist rebuild` command
-			rootCmd := command.NewRootCommand()
 			output := filepath.Join(t.TempDir(), "db")
-			rootCmd.SetArgs([]string{
-				"surgery", "freelist", "rebuild", srcPath,
-				"--output", output,
-			})
-			err = rootCmd.Execute()
-			require.Equal(t, tc.expectedError, err)
+			res := runCLI(t, "surgery", "freelist", "rebuild", srcPath, "--output", output)
+			if tc.expectedError != nil {
+				require.Error(t, res.err)
+				require.ErrorIs(t, res.err, tc.expectedError)
+				return
+			}
 
-			if tc.expectedError == nil {
-				// Verify the freelist has already been rebuilt.
-				meta = readMetaPage(t, output)
-				if meta.Freelist() <= 1 || meta.Freelist() >= meta.Pgid() {
-					t.Fatalf("freelist (%d) isn't in the valid range (1, %d)", meta.Freelist(), meta.Pgid())
-				}
+			require.NoError(t, res.err)
+
+			// Verify the freelist has already been rebuilt.
+			meta = readMetaPage(t, output)
+			if meta.Freelist() <= 1 || meta.Freelist() >= meta.Pgid() {
+				t.Fatalf("freelist (%d) isn't in the valid range (1, %d)", meta.Freelist(), meta.Pgid())
 			}
 		})
 	}

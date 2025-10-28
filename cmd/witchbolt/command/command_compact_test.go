@@ -2,7 +2,6 @@ package command_test
 
 import (
 	crypto "crypto/rand"
-	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -10,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -78,10 +76,8 @@ func TestCompactCommand_Run(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Running compact cmd")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"compact", "-o", dstdb.Path(), db.Path()})
-	err = rootCmd.Execute()
-	require.NoError(t, err)
+	res := runCLI(t, "compact", "-o", dstdb.Path(), db.Path())
+	require.NoError(t, res.err)
 
 	t.Log("Checking output")
 	dbChkAfterCompact, err := chkdb(db.Path())
@@ -93,9 +89,7 @@ func TestCompactCommand_Run(t *testing.T) {
 }
 
 func TestCompactCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("requires at least 1 arg(s), only received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"compact"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "compact")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "missing flags: --output=STRING")
 }

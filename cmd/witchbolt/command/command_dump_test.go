@@ -1,16 +1,12 @@
 package command_test
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -21,24 +17,16 @@ func TestDumpCommand_Run(t *testing.T) {
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 	t.Log("Running dump command")
-	rootCmd := command.NewRootCommand()
-	outputBuf := bytes.NewBufferString("")
-	rootCmd.SetOut(outputBuf)
-	rootCmd.SetArgs([]string{"dump", db.Path(), "0"})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
+	res := runCLI(t, "dump", db.Path(), "0")
+	require.NoError(t, res.err)
 
 	t.Log("Checking output")
 	exp := `0000010 edda 0ced 0200 0000 0010 0000 0000 0000`
-	output, err := io.ReadAll(outputBuf)
-	require.NoError(t, err)
-	require.True(t, strings.Contains(string(output), exp), "unexpected stdout:", string(output))
+	require.True(t, strings.Contains(res.stdout, exp), "unexpected stdout:", res.stdout)
 }
 
 func TestDumpCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("requires at least 2 arg(s), only received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"dump"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "dump")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path> <page-i-ds> ...\"")
 }

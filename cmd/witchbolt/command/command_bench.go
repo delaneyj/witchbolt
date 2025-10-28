@@ -2,6 +2,7 @@ package command
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,11 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 var benchBucketName = []byte("bench")
@@ -41,26 +38,65 @@ type benchOptions struct {
 	pageSize        int
 	initialMmapSize int
 	deleteFraction  float64 // Fraction of keys of last tx to delete during writes. works only with "seq-del" write mode.
+	explicitPath    bool
 }
 
-func (o *benchOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.profileMode, "profile-mode", "rw", "")
-	fs.StringVar(&o.writeMode, "write-mode", "seq", "")
-	fs.StringVar(&o.readMode, "read-mode", "seq", "")
-	fs.Int64Var(&o.iterations, "count", 1000, "")
-	fs.Int64Var(&o.batchSize, "batch-size", 0, "")
-	fs.IntVar(&o.keySize, "key-size", 8, "")
-	fs.IntVar(&o.valueSize, "value-size", 32, "")
-	fs.StringVar(&o.cpuProfile, "cpuprofile", "", "")
-	fs.StringVar(&o.memProfile, "memprofile", "", "")
-	fs.StringVar(&o.blockProfile, "blockprofile", "", "")
-	fs.Float64Var(&o.fillPercent, "fill-percent", witchbolt.DefaultFillPercent, "")
-	fs.BoolVar(&o.noSync, "no-sync", false, "")
-	fs.BoolVar(&o.work, "work", false, "")
-	fs.StringVar(&o.path, "path", "", "")
-	fs.BoolVar(&o.goBenchOutput, "gobench-output", false, "")
-	fs.IntVar(&o.pageSize, "page-size", common.DefaultPageSize, "Set page size in bytes.")
-	fs.IntVar(&o.initialMmapSize, "initial-mmap-size", 0, "Set initial mmap size in bytes for database file.")
+type benchIO struct {
+	stdout io.Writer
+	stderr io.Writer
+}
+
+type BenchCmd struct {
+	ProfileMode     string  `name:"profile-mode" default:"rw" help:"Profiling mode: rw (writes then reads), r (reads only), w (writes only)."`
+	WriteMode       string  `name:"write-mode" default:"seq" enum:"seq,rnd,seq-nest,rnd-nest,seq-del" help:"Pattern used for write operations."`
+	ReadMode        string  `name:"read-mode" default:"seq" enum:"seq,rnd" help:"Pattern used for read operations."`
+	Count           int64   `name:"count" default:"1000" help:"Number of benchmark iterations."`
+	BatchSize       int64   `name:"batch-size" default:"0" help:"Batch size per transaction. Defaults to count when zero."`
+	KeySize         int     `name:"key-size" default:"8" help:"Size of keys in bytes."`
+	ValueSize       int     `name:"value-size" default:"32" help:"Size of values in bytes."`
+	CPUProfile      string  `name:"cpuprofile" help:"Write CPU profile to the specified file."`
+	MemProfile      string  `name:"memprofile" help:"Write heap profile to the specified file."`
+	BlockProfile    string  `name:"blockprofile" help:"Write block profile to the specified file."`
+	FillPercent     float64 `name:"fill-percent" default:"0.5" help:"Fill percentage used for buckets."`
+	NoSync          bool    `name:"no-sync" help:"Disable fsync for the destination database."`
+	Work            bool    `name:"work" help:"Keep the generated database file (implies printing its path)."`
+	Path            string  `name:"path" help:"Existing database file to benchmark; if omitted, a temporary file is created." type:"path"`
+	GoBenchOutput   bool    `name:"gobench-output" help:"Emit results in go test benchmark format."`
+	PageSize        int     `name:"page-size" default:"4096" help:"Database page size in bytes."`
+	InitialMmapSize int     `name:"initial-mmap-size" default:"0" help:"Initial mmap size in bytes for database file."`
+}
+
+func (c *BenchCmd) Run() error {
+	options := benchOptions{
+		profileMode:     c.ProfileMode,
+		writeMode:       c.WriteMode,
+		readMode:        c.ReadMode,
+		iterations:      c.Count,
+		batchSize:       c.BatchSize,
+		keySize:         c.KeySize,
+		valueSize:       c.ValueSize,
+		cpuProfile:      c.CPUProfile,
+		memProfile:      c.MemProfile,
+		blockProfile:    c.BlockProfile,
+		fillPercent:     c.FillPercent,
+		noSync:          c.NoSync,
+		work:            c.Work,
+		path:            c.Path,
+		goBenchOutput:   c.GoBenchOutput,
+		pageSize:        c.PageSize,
+		initialMmapSize: c.InitialMmapSize,
+		explicitPath:    c.Path != "",
+	}
+
+	if err := options.Validate(); err != nil {
+		return err
+	}
+	if err := options.SetOptionValues(); err != nil {
+		return err
+	}
+
+	io := benchIO{stdout: os.Stdout, stderr: os.Stderr}
+	return benchFunc(io, &options)
 }
 
 // Returns an error if `bench` options are not valid.
@@ -111,33 +147,12 @@ func (o *benchOptions) SetOptionValues() error {
 	return nil
 }
 
-func newBenchCommand() *cobra.Command {
-	var o benchOptions
-
-	benchCmd := &cobra.Command{
-		Use:   "bench",
-		Short: "run synthetic benchmark against witchbolt",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			if err := o.SetOptionValues(); err != nil {
-				return err
-			}
-			return benchFunc(cmd, &o)
-		},
+func benchFunc(io benchIO, options *benchOptions) error {
+	if options.work {
+		fmt.Fprintf(io.stderr, "work: %s\n", options.path)
 	}
 
-	o.AddFlags(benchCmd.Flags())
-
-	return benchCmd
-}
-
-func benchFunc(cmd *cobra.Command, options *benchOptions) error {
-	// Remove path if "-work" is not set. Otherwise keep path.
-	if options.work {
-		fmt.Fprintf(cmd.ErrOrStderr(), "work: %s\n", options.path)
-	} else {
+	if !options.work && !options.explicitPath {
 		defer os.Remove(options.path)
 	}
 
@@ -156,8 +171,8 @@ func benchFunc(cmd *cobra.Command, options *benchOptions) error {
 
 	var writeResults benchResults
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "starting write benchmark.\n")
-	keys, err := runWrites(cmd, db, options, &writeResults, r)
+	fmt.Fprintf(io.stderr, "starting write benchmark.\n")
+	keys, err := runWrites(io, db, options, &writeResults, r)
 	if err != nil {
 		return fmt.Errorf("write: %v", err)
 	}
@@ -169,9 +184,9 @@ func benchFunc(cmd *cobra.Command, options *benchOptions) error {
 	}
 
 	var readResults benchResults
-	fmt.Fprintf(cmd.ErrOrStderr(), "starting read benchmark.\n")
+	fmt.Fprintf(io.stderr, "starting read benchmark.\n")
 	// Read from the database.
-	if err := runReads(cmd, db, options, &readResults, keys); err != nil {
+	if err := runReads(io, db, options, &readResults, keys); err != nil {
 		return fmt.Errorf("bench: read: %s", err)
 	}
 
@@ -181,25 +196,27 @@ func benchFunc(cmd *cobra.Command, options *benchOptions) error {
 		benchWriteName := "BenchmarkWrite"
 		benchReadName := "BenchmarkRead"
 		maxLen := max(len(benchReadName), len(benchWriteName))
-		printGoBenchResult(cmd.OutOrStdout(), writeResults, maxLen, benchWriteName)
-		printGoBenchResult(cmd.OutOrStdout(), readResults, maxLen, benchReadName)
+		printGoBenchResult(io.stdout, writeResults, maxLen, benchWriteName)
+		printGoBenchResult(io.stdout, readResults, maxLen, benchReadName)
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "# Write\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", writeResults.getCompletedOps(), writeResults.getDuration(), writeResults.opDuration(), writeResults.opsPerSecond())
-		fmt.Fprintf(cmd.OutOrStdout(), "# Read\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", readResults.getCompletedOps(), readResults.getDuration(), readResults.opDuration(), readResults.opsPerSecond())
+		fmt.Fprintf(io.stdout, "# Write\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", writeResults.getCompletedOps(), writeResults.getDuration(), writeResults.opDuration(), writeResults.opsPerSecond())
+		fmt.Fprintf(io.stdout, "# Read\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", readResults.getCompletedOps(), readResults.getDuration(), readResults.opDuration(), readResults.opsPerSecond())
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "")
+	fmt.Fprintln(io.stdout, "")
 
 	return nil
 }
 
-func runWrites(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
+func runWrites(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
 	// Start profiling for writes.
 	if options.profileMode == "rw" || options.profileMode == "w" {
-		startProfiling(cmd, options)
+		if err := startProfiling(options); err != nil {
+			return nil, err
+		}
 	}
 
 	finishChan := make(chan interface{})
-	go checkProgress(results, finishChan, cmd.ErrOrStderr())
+	go checkProgress(results, finishChan, io.stderr)
 	defer close(finishChan)
 
 	t := time.Now()
@@ -208,16 +225,16 @@ func runWrites(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, resu
 	var err error
 	switch options.writeMode {
 	case "seq":
-		keys, err = runWritesSequential(cmd, db, options, results)
+		keys, err = runWritesSequential(io, db, options, results)
 	case "rnd":
-		keys, err = runWritesRandom(cmd, db, options, results, r)
+		keys, err = runWritesRandom(io, db, options, results, r)
 	case "seq-nest":
-		keys, err = runWritesSequentialNested(cmd, db, options, results)
+		keys, err = runWritesSequentialNested(io, db, options, results)
 	case "rnd-nest":
-		keys, err = runWritesRandomNested(cmd, db, options, results, r)
+		keys, err = runWritesRandomNested(io, db, options, results, r)
 	case "seq-del":
 		options.deleteFraction = 0.1
-		keys, err = runWritesSequentialAndDelete(cmd, db, options, results)
+		keys, err = runWritesSequentialAndDelete(io, db, options, results)
 	default:
 		return nil, fmt.Errorf("invalid write mode: %s", options.writeMode)
 	}
@@ -227,36 +244,38 @@ func runWrites(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, resu
 
 	// Stop profiling for writes only.
 	if options.profileMode == "w" {
-		stopProfiling(cmd)
+		if err := stopProfiling(); err != nil {
+			return keys, err
+		}
 	}
 
 	return keys, err
 }
 
-func runWritesSequential(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
+func runWritesSequential(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
 	var i = uint32(0)
-	return runWritesWithSource(cmd, db, options, results, func() uint32 { i++; return i })
+	return runWritesWithSource(io, db, options, results, func() uint32 { i++; return i })
 }
 
-func runWritesSequentialAndDelete(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
+func runWritesSequentialAndDelete(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
 	var i = uint32(0)
-	return runWritesDeletesWithSource(cmd, db, options, results, func() uint32 { i++; return i })
+	return runWritesDeletesWithSource(io, db, options, results, func() uint32 { i++; return i })
 }
 
-func runWritesRandom(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
-	return runWritesWithSource(cmd, db, options, results, func() uint32 { return r.Uint32() })
+func runWritesRandom(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
+	return runWritesWithSource(io, db, options, results, func() uint32 { return r.Uint32() })
 }
 
-func runWritesSequentialNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
+func runWritesSequentialNested(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
 	var i = uint32(0)
-	return runWritesNestedWithSource(cmd, db, options, results, func() uint32 { i++; return i })
+	return runWritesNestedWithSource(io, db, options, results, func() uint32 { i++; return i })
 }
 
-func runWritesRandomNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
-	return runWritesNestedWithSource(cmd, db, options, results, func() uint32 { return r.Uint32() })
+func runWritesRandomNested(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
+	return runWritesNestedWithSource(io, db, options, results, func() uint32 { return r.Uint32() })
 }
 
-func runWritesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
+func runWritesWithSource(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
 	var keys []nestedKey
 	if options.readMode == "rnd" {
 		keys = make([]nestedKey, 0, options.iterations)
@@ -267,7 +286,7 @@ func runWritesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOpt
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.fillPercent
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Starting write iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.batchSize; j++ {
 				key := make([]byte, options.keySize)
 				value := make([]byte, options.valueSize)
@@ -284,7 +303,7 @@ func runWritesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOpt
 				}
 				results.addCompletedOps(1)
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "Finished write iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Finished write iteration %d\n", i)
 
 			return nil
 		}); err != nil {
@@ -294,7 +313,7 @@ func runWritesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOpt
 	return keys, nil
 }
 
-func runWritesDeletesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
+func runWritesDeletesWithSource(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
 	var keys []nestedKey
 	deleteSize := int64(math.Ceil(float64(options.batchSize) * options.deleteFraction))
 	var InsertedKeys [][]byte
@@ -304,16 +323,16 @@ func runWritesDeletesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *b
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.fillPercent
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Starting delete iteration %d, deleteSize: %d\n", i, deleteSize)
+			fmt.Fprintf(io.stderr, "Starting delete iteration %d, deleteSize: %d\n", i, deleteSize)
 			for i := int64(0); i < deleteSize && i < int64(len(InsertedKeys)); i++ {
 				if err := b.Delete(InsertedKeys[i]); err != nil {
 					return err
 				}
 			}
 			InsertedKeys = InsertedKeys[:0]
-			fmt.Fprintf(cmd.ErrOrStderr(), "Finished delete iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Finished delete iteration %d\n", i)
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Starting write iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.batchSize; j++ {
 
 				key := make([]byte, options.keySize)
@@ -332,7 +351,7 @@ func runWritesDeletesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *b
 				}
 				results.addCompletedOps(1)
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "Finished write iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Finished write iteration %d\n", i)
 			return nil
 		}); err != nil {
 			return nil, err
@@ -341,7 +360,7 @@ func runWritesDeletesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *b
 	return keys, nil
 }
 
-func runWritesNestedWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
+func runWritesNestedWithSource(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
 	var keys []nestedKey
 	if options.readMode == "rnd" {
 		keys = make([]nestedKey, 0, options.iterations)
@@ -366,7 +385,7 @@ func runWritesNestedWithSource(cmd *cobra.Command, db *witchbolt.DB, options *be
 			}
 			b.FillPercent = options.fillPercent
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Starting write iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.batchSize; j++ {
 				var key = make([]byte, options.keySize)
 				var value = make([]byte, options.valueSize)
@@ -383,7 +402,7 @@ func runWritesNestedWithSource(cmd *cobra.Command, db *witchbolt.DB, options *be
 				}
 				results.addCompletedOps(1)
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "Finished write iteration %d\n", i)
+			fmt.Fprintf(io.stderr, "Finished write iteration %d\n", i)
 
 			return nil
 		}); err != nil {
@@ -393,14 +412,16 @@ func runWritesNestedWithSource(cmd *cobra.Command, db *witchbolt.DB, options *be
 	return keys, nil
 }
 
-func runReads(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keys []nestedKey) error {
+func runReads(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults, keys []nestedKey) error {
 	// Start profiling for reads.
 	if options.profileMode == "r" {
-		startProfiling(cmd, options)
+		if err := startProfiling(options); err != nil {
+			return err
+		}
 	}
 
 	finishChan := make(chan interface{})
-	go checkProgress(results, finishChan, cmd.ErrOrStderr())
+	go checkProgress(results, finishChan, io.stderr)
 	defer close(finishChan)
 
 	t := time.Now()
@@ -410,16 +431,16 @@ func runReads(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, resul
 	case "seq":
 		switch options.writeMode {
 		case "seq-nest", "rnd-nest":
-			err = runReadsSequentialNested(cmd, db, options, results)
+			err = runReadsSequentialNested(io, db, options, results)
 		default:
-			err = runReadsSequential(cmd, db, options, results)
+			err = runReadsSequential(io, db, options, results)
 		}
 	case "rnd":
 		switch options.writeMode {
 		case "seq-nest", "rnd-nest":
-			err = runReadsRandomNested(cmd, db, options, keys, results)
+			err = runReadsRandomNested(io, db, options, keys, results)
 		default:
-			err = runReadsRandom(cmd, db, options, keys, results)
+			err = runReadsRandom(io, db, options, keys, results)
 		}
 	default:
 		return fmt.Errorf("invalid read mode: %s", options.readMode)
@@ -430,7 +451,9 @@ func runReads(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, resul
 
 	// Stop profiling for reads.
 	if options.profileMode == "rw" || options.profileMode == "r" {
-		stopProfiling(cmd)
+		if stopErr := stopProfiling(); stopErr != nil {
+			return stopErr
+		}
 	}
 
 	return err
@@ -438,7 +461,7 @@ func runReads(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, resul
 
 type nestedKey struct{ bucket, key []byte }
 
-func runReadsSequential(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) error {
+func runReadsSequential(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults) error {
 	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
@@ -476,7 +499,7 @@ func runReadsSequential(cmd *cobra.Command, db *witchbolt.DB, options *benchOpti
 	})
 }
 
-func runReadsRandom(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, keys []nestedKey, results *benchResults) error {
+func runReadsRandom(io benchIO, db *witchbolt.DB, options *benchOptions, keys []nestedKey, results *benchResults) error {
 	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
@@ -515,7 +538,7 @@ func runReadsRandom(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions,
 	})
 }
 
-func runReadsSequentialNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) error {
+func runReadsSequentialNested(io benchIO, db *witchbolt.DB, options *benchOptions, results *benchResults) error {
 	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
@@ -552,7 +575,7 @@ func runReadsSequentialNested(cmd *cobra.Command, db *witchbolt.DB, options *ben
 	})
 }
 
-func runReadsRandomNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, nestedKeys []nestedKey, results *benchResults) error {
+func runReadsRandomNested(io benchIO, db *witchbolt.DB, options *benchOptions, nestedKeys []nestedKey, results *benchResults) error {
 	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
@@ -612,69 +635,79 @@ func checkProgress(results *benchResults, finishChan chan interface{}, stderr io
 
 var cpuprofile, memprofile, blockprofile *os.File
 
-func startProfiling(cmd *cobra.Command, options *benchOptions) {
-	var err error
-
+func startProfiling(options *benchOptions) error {
 	// Start CPU profiling.
 	if options.cpuProfile != "" {
-		cpuprofile, err = os.Create(options.cpuProfile)
+		file, err := os.Create(options.cpuProfile)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "bench: could not create cpu profile %q: %v\n", options.cpuProfile, err)
-			os.Exit(1)
+			return fmt.Errorf("bench: could not create cpu profile %q: %w", options.cpuProfile, err)
 		}
-		err = pprof.StartCPUProfile(cpuprofile)
-		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "bench: could not start cpu profile %q: %v\n", options.cpuProfile, err)
-			os.Exit(1)
+		if err := pprof.StartCPUProfile(file); err != nil {
+			file.Close()
+			return fmt.Errorf("bench: could not start cpu profile %q: %w", options.cpuProfile, err)
 		}
+		cpuprofile = file
 	}
 
 	// Start memory profiling.
 	if options.memProfile != "" {
-		memprofile, err = os.Create(options.memProfile)
+		file, err := os.Create(options.memProfile)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "bench: could not create memory profile %q: %v\n", options.memProfile, err)
-			os.Exit(1)
+			return fmt.Errorf("bench: could not create memory profile %q: %w", options.memProfile, err)
 		}
+		memprofile = file
 		runtime.MemProfileRate = 4096
 	}
 
-	// Start fatal profiling.
+	// Start block profiling.
 	if options.blockProfile != "" {
-		blockprofile, err = os.Create(options.blockProfile)
+		file, err := os.Create(options.blockProfile)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "bench: could not create block profile %q: %v\n", options.blockProfile, err)
-			os.Exit(1)
+			return fmt.Errorf("bench: could not create block profile %q: %w", options.blockProfile, err)
 		}
+		blockprofile = file
 		runtime.SetBlockProfileRate(1)
 	}
+
+	return nil
 }
 
-func stopProfiling(cmd *cobra.Command) {
+func stopProfiling() error {
+	var errs []error
+
 	if cpuprofile != nil {
 		pprof.StopCPUProfile()
-		cpuprofile.Close()
+		if err := cpuprofile.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("bench: closing cpu profile: %w", err))
+		}
 		cpuprofile = nil
 	}
 
 	if memprofile != nil {
-		err := pprof.Lookup("heap").WriteTo(memprofile, 0)
-		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "bench: could not write mem profile")
+		if err := pprof.Lookup("heap").WriteTo(memprofile, 0); err != nil {
+			errs = append(errs, fmt.Errorf("bench: could not write mem profile: %w", err))
 		}
-		memprofile.Close()
+		if err := memprofile.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("bench: closing mem profile: %w", err))
+		}
 		memprofile = nil
 	}
 
 	if blockprofile != nil {
-		err := pprof.Lookup("block").WriteTo(blockprofile, 0)
-		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "bench: could not write block profile")
+		if err := pprof.Lookup("block").WriteTo(blockprofile, 0); err != nil {
+			errs = append(errs, fmt.Errorf("bench: could not write block profile: %w", err))
 		}
-		blockprofile.Close()
+		if err := blockprofile.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("bench: closing block profile: %w", err))
+		}
 		blockprofile = nil
 		runtime.SetBlockProfileRate(0)
 	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // benchResults represents the performance results of the benchmark and is thread-safe.

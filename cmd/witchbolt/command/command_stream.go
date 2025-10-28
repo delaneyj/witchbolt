@@ -9,55 +9,35 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/delaneyj/witchbolt/stream"
 )
 
-func newStreamCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "stream",
-		Short: "Stream replication helpers",
-	}
-	cmd.AddCommand(newStreamRestoreCommand())
-	return cmd
+type StreamCmd struct {
+	Restore StreamRestoreCmd `cmd:"" help:"Restore a database from stream replicas"`
 }
 
-type streamRestoreOptions struct {
-	ConfigPath string
-	TargetPath string
+type StreamRestoreCmd struct {
+	ConfigPath string `name:"config" short:"c" required:"" help:"Path to stream configuration file (YAML or JSON)" type:"path"`
+	TargetPath string `name:"target" short:"t" help:"Override restore target path" type:"path"`
 }
 
-func newStreamRestoreCommand() *cobra.Command {
-	var opts streamRestoreOptions
-	cmd := &cobra.Command{
-		Use:   "restore",
-		Short: "Restore a database from stream replicas",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if opts.ConfigPath == "" {
-				return errors.New("config file is required")
-			}
-			cfg, err := loadStreamConfig(opts.ConfigPath)
-			if err != nil {
-				return err
-			}
-			if opts.TargetPath != "" {
-				cfg.Restore.TargetPath = opts.TargetPath
-			}
-			if cfg.Restore.TargetPath == "" {
-				return errors.New("target path must be specified via config or --target")
-			}
-			ctx := cmd.Context()
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			return stream.RestoreStandalone(ctx, cfg)
-		},
+func (c *StreamRestoreCmd) Run() error {
+	if c.ConfigPath == "" {
+		return errors.New("config file is required")
 	}
-	cmd.Flags().StringVarP(&opts.ConfigPath, "config", "c", "", "Path to stream configuration file (YAML or JSON)")
-	cmd.Flags().StringVarP(&opts.TargetPath, "target", "t", "", "Override restore target path")
-	return cmd
+	cfg, err := loadStreamConfig(c.ConfigPath)
+	if err != nil {
+		return err
+	}
+	if c.TargetPath != "" {
+		cfg.Restore.TargetPath = c.TargetPath
+	}
+	if cfg.Restore.TargetPath == "" {
+		return errors.New("target path must be specified via config or --target")
+	}
+	return stream.RestoreStandalone(context.Background(), cfg)
 }
 
 func loadStreamConfig(path string) (stream.Config, error) {

@@ -3,31 +3,20 @@ package command
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-
 	"github.com/delaneyj/witchbolt"
 )
 
-func newBucketsCommand() *cobra.Command {
-	bucketsCmd := &cobra.Command{
-		Use:   "buckets <witchbolt-file>",
-		Short: "print a list of buckets in witchbolt database",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return bucketsFunc(cmd, args[0])
-		},
-	}
-
-	return bucketsCmd
+type BucketsCmd struct {
+	Path string `arg:"" help:"Path to witchbolt database file" type:"path"`
 }
 
-func bucketsFunc(cmd *cobra.Command, dbPath string) error {
-	if _, err := checkSourceDBPath(dbPath); err != nil {
+func (c *BucketsCmd) Run() error {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
 	// Open database.
-	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
+	db, err := witchbolt.Open(c.Path, 0600, &witchbolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -39,7 +28,7 @@ func bucketsFunc(cmd *cobra.Command, dbPath string) error {
 	// Print buckets.
 	return db.View(func(tx *witchbolt.Tx) error {
 		return tx.ForEach(func(name []byte, _ *witchbolt.Bucket) error {
-			fmt.Fprintln(cmd.OutOrStdout(), string(name))
+			fmt.Println(string(name))
 			return nil
 		})
 	})

@@ -1,14 +1,11 @@
 package command_test
 
 import (
-	"bytes"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -49,19 +46,16 @@ func TestBucketsCommand_Run(t *testing.T) {
 			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 			t.Log("Running buckets cmd")
-			rootCmd := command.NewRootCommand()
-			outputBuf := bytes.NewBufferString("")
-			rootCmd.SetOut(outputBuf)
+			args := append([]string{}, tc.args...)
+			args[1] = db.Path()
+			res := runCLI(t, args...)
+			if tc.expErr != nil {
+				require.ErrorContains(t, res.err, tc.expErr.Error())
+			} else {
+				require.NoError(t, res.err)
+			}
 
-			tc.args[1] = db.Path()
-			rootCmd.SetArgs(tc.args)
-			err := rootCmd.Execute()
-			require.Equal(t, tc.expErr, err)
-
-			t.Log("Checking output")
-			output, err := io.ReadAll(outputBuf)
-			require.NoError(t, err)
-			require.Containsf(t, string(output), tc.expOutput, "unexpected stdout:\n\n%s", string(output))
+			require.Containsf(t, res.stdout, tc.expOutput, "unexpected stdout:\n\n%s", res.stdout)
 		})
 	}
 }

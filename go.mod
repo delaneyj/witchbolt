@@ -3,13 +3,12 @@ module github.com/delaneyj/witchbolt
 go 1.25
 
 require (
+	github.com/alecthomas/kong v1.12.1
 	github.com/fxamacker/cbor/v2 v2.6.0
 	github.com/klauspost/compress v1.18.0
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/nats-io/nats.go v1.44.0
 	github.com/pkg/sftp v1.13.6
-	github.com/spf13/cobra v1.10.1
-	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.41.0
 	golang.org/x/sync v0.17.0
@@ -24,7 +23,6 @@ require (
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

@@ -4,80 +4,50 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
-
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"os"
 
 	"github.com/delaneyj/witchbolt/internal/common"
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
-type pageItemOptions struct {
-	keyOnly   bool
-	valueOnly bool
-	format    string
+type PageItemCmd struct {
+	Path      string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	PageID    uint64 `arg:"" help:"Page ID"`
+	ItemID    uint64 `arg:"" help:"Item ID"`
+	KeyOnly   bool   `help:"Print only the key"`
+	ValueOnly bool   `help:"Print only the value"`
+	Format    string `default:"auto" help:"Output format: auto|ascii-encoded|hex|bytes"`
 }
 
-func newPageItemCommand() *cobra.Command {
-	var opt pageItemOptions
-	pageItemCmd := &cobra.Command{
-		Use:   "page-item [options] <witchbolt-file> pageid itemid",
-		Short: "print a page item key and value in a witchbolt database",
-		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath := args[0]
-			pageID, err := strconv.ParseUint(args[1], 10, 64)
-			if err != nil {
-				return err
-			}
-			itemID, err := strconv.ParseUint(args[2], 10, 64)
-			if err != nil {
-				return err
-			}
-			return pageItemFunc(cmd, opt, dbPath, pageID, itemID)
-		},
-	}
-	opt.AddFlags(pageItemCmd.Flags())
-
-	return pageItemCmd
-}
-
-func (o *pageItemOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&o.keyOnly, "key-only", false, "Print only the key")
-	fs.BoolVar(&o.valueOnly, "value-only", false, "Print only the value")
-	fs.StringVar(&o.format, "format", "auto", "Output format one of: "+FORMAT_MODES)
-}
-
-func pageItemFunc(cmd *cobra.Command, cfg pageItemOptions, dbPath string, pageID, itemID uint64) (err error) {
-	if cfg.keyOnly && cfg.valueOnly {
+func (c *PageItemCmd) Run() error {
+	if c.KeyOnly && c.ValueOnly {
 		return errors.New("the --key-only or --value-only flag may be set, but not both")
 	}
 
-	if _, err := checkSourceDBPath(dbPath); err != nil {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
 	// retrieve page info and page size.
-	_, buf, err := guts_cli.ReadPage(dbPath, pageID)
+	_, buf, err := guts_cli.ReadPage(c.Path, c.PageID)
 	if err != nil {
 		return err
 	}
 
-	if !cfg.valueOnly {
-		err := pageItemPrintLeafItemKey(cmd.OutOrStdout(), buf, uint16(itemID), cfg.format)
+	if !c.ValueOnly {
+		err := pageItemPrintLeafItemKey(os.Stdout, buf, uint16(c.ItemID), c.Format)
 		if err != nil {
 			return err
 		}
 	}
-	if !cfg.keyOnly {
-		err := pageItemPrintLeafItemValue(cmd.OutOrStdout(), buf, uint16(itemID), cfg.format)
+	if !c.KeyOnly {
+		err := pageItemPrintLeafItemValue(os.Stdout, buf, uint16(c.ItemID), c.Format)
 		if err != nil {
 			return err
 		}
 	}
 
-	return
+	return nil
 }
 
 func pageItemPrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {

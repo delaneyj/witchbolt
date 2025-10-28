@@ -3,9 +3,6 @@ package command
 import (
 	"fmt"
 	"strconv"
-	"strings"
-
-	"github.com/spf13/cobra"
 
 	"github.com/delaneyj/witchbolt"
 )
@@ -19,35 +16,17 @@ func (e *PageError) Error() string {
 	return fmt.Sprintf("page error: id=%d, err=%s", e.ID, e.Err)
 }
 
-func newPagesCommand() *cobra.Command {
-	pagesCmd := &cobra.Command{
-		Use:   "pages <witchbolt-file>",
-		Short: "print a list of pages in witchbolt database",
-		Long: strings.TrimLeft(`
-Pages prints a table of pages with their type (meta, leaf, branch, freelist).
-Leaf and branch pages will show a key count in the "items" column while the
-freelist will show the number of free pages in the "items" column.
-
-The "overflow" column shows the number of blocks that the page spills over
-into. Normally there is no overflow but large keys and values can cause
-a single page to take up multiple blocks.
-`, "\n"),
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return pagesFunc(cmd, args[0])
-		},
-	}
-
-	return pagesCmd
+type PagesCmd struct {
+	Path string `arg:"" help:"Path to witchbolt database file" type:"path"`
 }
 
-func pagesFunc(cmd *cobra.Command, dbPath string) error {
-	if _, err := checkSourceDBPath(dbPath); err != nil {
+func (c *PagesCmd) Run() error {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
 	// Open database.
-	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
+	db, err := witchbolt.Open(c.Path, 0600, &witchbolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -57,8 +36,8 @@ func pagesFunc(cmd *cobra.Command, dbPath string) error {
 	defer db.Close()
 
 	// Write header.
-	fmt.Fprintln(cmd.OutOrStdout(), "ID       TYPE       ITEMS  OVRFLW")
-	fmt.Fprintln(cmd.OutOrStdout(), "======== ========== ====== ======")
+	fmt.Println("ID       TYPE       ITEMS  OVRFLW")
+	fmt.Println("======== ========== ====== ======")
 
 	return db.View(func(tx *witchbolt.Tx) error {
 		var id int
@@ -80,7 +59,7 @@ func pagesFunc(cmd *cobra.Command, dbPath string) error {
 			}
 
 			// Print table row.
-			fmt.Fprintf(cmd.OutOrStdout(), "%-8d %-10s %-6s %-6s\n", p.ID, p.Type, count, overflow)
+			fmt.Printf("%-8d %-10s %-6s %-6s\n", p.ID, p.Type, count, overflow)
 
 			// Move to the next non-overflow page.
 			id += 1

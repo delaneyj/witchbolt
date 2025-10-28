@@ -1,14 +1,10 @@
 package command_test
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -20,23 +16,12 @@ func TestInfoCommand_Run(t *testing.T) {
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 	t.Log("Running info cmd")
-	rootCmd := command.NewRootCommand()
-	outputBuf := bytes.NewBufferString("")
-	rootCmd.SetOut(outputBuf)
-
-	rootCmd.SetArgs([]string{"info", db.Path()})
-	err := rootCmd.Execute()
-	require.NoError(t, err)
-
-	t.Log("Checking output")
-	_, err = io.ReadAll(outputBuf)
-	require.NoError(t, err)
+	res := runCLI(t, "info", db.Path())
+	require.NoError(t, res.err)
 }
 
 func TestInfoCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("accepts 1 arg(s), received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"info"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "info")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path>\"")
 }

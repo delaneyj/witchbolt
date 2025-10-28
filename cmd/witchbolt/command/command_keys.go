@@ -1,42 +1,23 @@
 package command
 
 import (
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"os"
 
 	"github.com/delaneyj/witchbolt"
 )
 
-type keysOptions struct {
-	format string
+type KeysCmd struct {
+	Path    string   `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Buckets []string `arg:"" help:"Bucket path (one or more bucket names)"`
+	Format  string   `short:"f" default:"auto" help:"Output format: auto|ascii-encoded|hex|bytes"`
 }
 
-func (o *keysOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVarP(&o.format, "format", "f", "auto", "Output format one of: "+FORMAT_MODES)
-}
-
-func newKeysCommand() *cobra.Command {
-	var o keysOptions
-
-	keysCmd := &cobra.Command{
-		Use:   "keys <witchbolt-file> <buckets>",
-		Short: "print a list of keys in the given (sub)bucket in witchbolt database",
-		Args:  cobra.MinimumNArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return keysFunc(cmd, o, args[0], args[1:]...)
-		},
-	}
-
-	o.AddFlags(keysCmd.Flags())
-	return keysCmd
-}
-
-func keysFunc(cmd *cobra.Command, cfg keysOptions, dbPath string, buckets ...string) error {
-	if _, err := checkSourceDBPath(dbPath); err != nil {
+func (c *KeysCmd) Run() error {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 	// Open database.
-	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
+	db, err := witchbolt.Open(c.Path, 0600, &witchbolt.Options{
 		ReadOnly: true,
 	})
 	if err != nil {
@@ -47,14 +28,14 @@ func keysFunc(cmd *cobra.Command, cfg keysOptions, dbPath string, buckets ...str
 	// Print keys.
 	return db.View(func(tx *witchbolt.Tx) error {
 		// Find bucket.
-		lastBucket, err := findLastBucket(tx, buckets)
+		lastBucket, err := findLastBucket(tx, c.Buckets)
 		if err != nil {
 			return err
 		}
 
 		// Iterate over each key.
 		return lastBucket.ForEach(func(key, _ []byte) error {
-			return writelnBytes(cmd.OutOrStdout(), key, cfg.format)
+			return writelnBytes(os.Stdout, key, c.Format)
 		})
 	})
 }

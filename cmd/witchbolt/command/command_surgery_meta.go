@@ -7,9 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-
 	"github.com/delaneyj/witchbolt/internal/common"
 )
 
@@ -20,28 +17,17 @@ const (
 	metaFieldPgid     = "pgid"
 )
 
-func newSurgeryMetaCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "meta <subcommand>",
-		Short: "meta page related surgery commands",
-	}
-
-	cmd.AddCommand(newSurgeryMetaValidateCommand())
-	cmd.AddCommand(newSurgeryMetaUpdateCommand())
-
-	return cmd
+type SurgeryMetaCmd struct {
+	Validate SurgeryMetaValidateCmd `cmd:"" help:"Validate both meta pages."`
+	Update   SurgeryMetaUpdateCmd   `cmd:"" help:"Update fields in meta pages."`
 }
 
-func newSurgeryMetaValidateCommand() *cobra.Command {
-	metaValidateCmd := &cobra.Command{
-		Use:   "validate <witchbolt-file>",
-		Short: "Validate both meta pages",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return surgeryMetaValidateFunc(args[0])
-		},
-	}
-	return metaValidateCmd
+type SurgeryMetaValidateCmd struct {
+	Src string `arg:"" help:"Path to witchbolt database file" type:"path"`
+}
+
+func (c *SurgeryMetaValidateCmd) Run() error {
+	return surgeryMetaValidateFunc(c.Src)
 }
 
 func surgeryMetaValidateFunc(srcDBPath string) error {
@@ -81,15 +67,6 @@ var allowedMetaUpdateFields = map[string]struct{}{
 	metaFieldPgid:     {},
 }
 
-// AddFlags sets the flags for `meta update` command.
-// Example: --fields root:16,freelist:8 --fields pgid:128
-// Result: []string{"root:16", "freelist:8", "pgid:128"}
-func (o *surgeryMetaUpdateOptions) AddFlags(fs *pflag.FlagSet) {
-	o.surgeryBaseOptions.AddFlags(fs)
-	fs.StringSliceVarP(&o.fields, "fields", "", o.fields, "comma separated list of fields (supported fields: pageSize, root, freelist and pgid) to be updated, and each item is a colon-separated key-value pair")
-	fs.Uint32VarP(&o.metaPageId, "meta-page", "", o.metaPageId, "the meta page ID to operate on, valid values are 0 and 1")
-}
-
 func (o *surgeryMetaUpdateOptions) Validate() error {
 	if err := o.surgeryBaseOptions.Validate(); err != nil {
 		return err
@@ -117,21 +94,23 @@ func (o *surgeryMetaUpdateOptions) Validate() error {
 	return nil
 }
 
-func newSurgeryMetaUpdateCommand() *cobra.Command {
-	var o surgeryMetaUpdateOptions
-	metaUpdateCmd := &cobra.Command{
-		Use:   "update <witchbolt-file>",
-		Short: "Update fields in meta pages",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryMetaUpdateFunc(args[0], o)
-		},
+type SurgeryMetaUpdateCmd struct {
+	Src        string   `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output     string   `name:"output" required:"" help:"Path to the output database file" type:"path"`
+	Fields     []string `name:"fields" help:"Comma-separated field updates (eg: root:16,freelist:8)"`
+	MetaPageID uint32   `name:"meta-page" default:"0" help:"Meta page ID to operate on (0 or 1)."`
+}
+
+func (c *SurgeryMetaUpdateCmd) Run() error {
+	cfg := surgeryMetaUpdateOptions{
+		surgeryBaseOptions: surgeryBaseOptions{outputDBFilePath: c.Output},
+		fields:             c.Fields,
+		metaPageId:         c.MetaPageID,
 	}
-	o.AddFlags(metaUpdateCmd.Flags())
-	return metaUpdateCmd
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return surgeryMetaUpdateFunc(c.Src, cfg)
 }
 
 func surgeryMetaUpdateFunc(srcDBPath string, cfg surgeryMetaUpdateOptions) error {

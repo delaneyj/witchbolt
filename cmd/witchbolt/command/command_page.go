@@ -3,81 +3,61 @@ package command
 import (
 	"fmt"
 	"io"
-
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"os"
 
 	"github.com/delaneyj/witchbolt/internal/common"
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
-type getPageOptions struct {
-	all    bool
-	format string
+type PageCmd struct {
+	Path        string   `arg:"" help:"Path to witchbolt database file" type:"path"`
+	PageIDs     []string `arg:"" optional:"" help:"Page IDs to print"`
+	All         bool     `help:"List all pages"`
+	FormatValue string   `default:"auto" help:"Output format: auto|ascii-encoded|hex|bytes (applies to leaf page values)"`
 }
 
-func newPageCommand() *cobra.Command {
-	var opt getPageOptions
-	pageCmd := &cobra.Command{
-		Use:   "page <witchbolt-file> [pageid...]",
-		Short: "page prints one or more pages in human readable format.",
-		Args:  cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath := args[0]
-			pageIDs, err := stringToPages(args[1:])
-			if err != nil {
-				return err
-			}
-			if len(pageIDs) == 0 && !opt.all {
-				return ErrPageIDRequired
-			}
-			return pageFunc(cmd, opt, dbPath, pageIDs)
-		},
+func (c *PageCmd) Run() error {
+	pageIDs, err := stringToPages(c.PageIDs)
+	if err != nil {
+		return err
 	}
-	opt.AddFlags(pageCmd.Flags())
+	if len(pageIDs) == 0 && !c.All {
+		return ErrPageIDRequired
+	}
 
-	return pageCmd
-}
-
-func (o *getPageOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&o.all, "all", false, "List all pages.")
-	fs.StringVar(&o.format, "format-value", "auto", "Output format one of: "+FORMAT_MODES+". Applies to values on the leaf page.")
-}
-
-func pageFunc(cmd *cobra.Command, cfg getPageOptions, dbPath string, pageIDs []uint64) (err error) {
-	if cfg.all && len(pageIDs) != 0 {
+	if c.All && len(pageIDs) != 0 {
 		return ErrInvalidPageArgs
 	}
 
-	if _, err := checkSourceDBPath(dbPath); err != nil {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
-	if cfg.all {
-		printAllPages(cmd, dbPath, cfg.format)
+	if c.All {
+		printAllPages(c.Path, c.FormatValue)
 	} else {
-		printPages(cmd, pageIDs, dbPath, cfg.format)
+		printPages(pageIDs, c.Path, c.FormatValue)
 	}
 
-	return
+	return nil
 }
 
-func printPages(cmd *cobra.Command, pageIDs []uint64, path string, formatValue string) {
+func printPages(pageIDs []uint64, path string, formatValue string) {
 	// print each page listed.
 	for i, pageID := range pageIDs {
 		// print a separator.
 		if i > 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "===============================================")
+			fmt.Println("===============================================")
 		}
-		_, pErr := printPage(cmd, path, pageID, formatValue)
+		_, pErr := printPage(path, pageID, formatValue)
 		if pErr != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Prining page %d failed: %s. Continuing...\n", pageID, pErr)
+			fmt.Printf("Prining page %d failed: %s. Continuing...\n", pageID, pErr)
 		}
 	}
 }
 
-// printPage prints given page to cmd.Stdout and returns error or number of interpreted pages.
-func printPage(cmd *cobra.Command, path string, pageID uint64, formatValue string) (numPages uint32, reterr error) {
+// printPage prints given page to stdout and returns error or number of interpreted pages.
+func printPage(path string, pageID uint64, formatValue string) (numPages uint32, reterr error) {
 	defer func() {
 		if err := recover(); err != nil {
 			reterr = fmt.Errorf("%s", err)
@@ -91,7 +71,7 @@ func printPage(cmd *cobra.Command, path string, pageID uint64, formatValue strin
 	}
 
 	// print basic page info.
-	stdout := cmd.OutOrStdout()
+	stdout := io.Writer(os.Stdout)
 	fmt.Fprintf(stdout, "Page ID:    %d\n", p.Id())
 	fmt.Fprintf(stdout, "Page Type:  %s\n", p.Typ())
 	fmt.Fprintf(stdout, "Total Size: %d bytes\n", len(buf))
@@ -114,21 +94,21 @@ func printPage(cmd *cobra.Command, path string, pageID uint64, formatValue strin
 	return p.Overflow(), nil
 }
 
-func printAllPages(cmd *cobra.Command, path string, formatValue string) {
+func printAllPages(path string, formatValue string) {
 	_, hwm, err := guts_cli.ReadPageAndHWMSize(path)
 	if err != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "cannot read number of pages: %v", err)
+		fmt.Printf("cannot read number of pages: %v", err)
 	}
 
 	// print each page listed.
 	for pageID := uint64(0); pageID < uint64(hwm); {
 		// print a separator.
 		if pageID > 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "===============================================")
+			fmt.Println("===============================================")
 		}
-		overflow, pErr := printPage(cmd, path, pageID, formatValue)
+		overflow, pErr := printPage(path, pageID, formatValue)
 		if pErr != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Prining page %d failed: %s. Continuing...\n", pageID, pErr)
+			fmt.Printf("Prining page %d failed: %s. Continuing...\n", pageID, pErr)
 			pageID++
 		} else {
 			pageID += uint64(overflow) + 1

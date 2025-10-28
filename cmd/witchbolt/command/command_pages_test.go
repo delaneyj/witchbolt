@@ -1,16 +1,12 @@
 package command_test
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -39,23 +35,12 @@ func TestPagesCommand_Run(t *testing.T) {
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 	t.Log("Running pages cmd")
-	rootCmd := command.NewRootCommand()
-	outputBuf := bytes.NewBufferString("")
-	rootCmd.SetOut(outputBuf)
-
-	rootCmd.SetArgs([]string{"pages", db.Path()})
-	err = rootCmd.Execute()
-	require.NoError(t, err)
-
-	t.Log("Checking output")
-	_, err = io.ReadAll(outputBuf)
-	require.NoError(t, err)
+	res := runCLI(t, "pages", db.Path())
+	require.NoError(t, res.err)
 }
 
 func TestPagesCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("accepts 1 arg(s), received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"pages"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "pages")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path>\"")
 }

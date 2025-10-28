@@ -1,17 +1,13 @@
 package command_test
 
 import (
-	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -61,26 +57,18 @@ func TestGetCommand_Run(t *testing.T) {
 			db.Close()
 			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
-			t.Log("Running get command")
-			rootCmd := command.NewRootCommand()
-			outputBuf := bytes.NewBufferString("")
-			rootCmd.SetOut(outputBuf)
-			rootCmd.SetArgs([]string{"get", db.Path(), tc.testBucket, tc.testKey})
-			err = rootCmd.Execute()
-			require.NoError(t, err)
+			args := []string{"get", db.Path(), tc.testBucket, tc.testKey}
 
-			t.Log("Checking output")
-			output, err := io.ReadAll(outputBuf)
-			require.NoError(t, err)
-			require.Equalf(t, tc.expectedValue, string(output), "unexpected stdout:\n\n%s", string(output))
+			t.Log("Running get command")
+			res := runCLI(t, args...)
+			require.NoError(t, res.err)
+			require.Equalf(t, tc.expectedValue, res.stdout, "unexpected stdout:\n\n%s", res.stdout)
 		})
 	}
 }
 
 func TestGetCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("requires at least 3 arg(s), only received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"get"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "get")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path> <bucket-key> ...\"")
 }

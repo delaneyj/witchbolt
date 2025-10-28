@@ -1,16 +1,12 @@
 package command_test
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/delaneyj/witchbolt"
-	"github.com/delaneyj/witchbolt/cmd/witchbolt/command"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
@@ -70,25 +66,15 @@ func TestKeysCommand_Run(t *testing.T) {
 			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 			t.Log("Running Keys cmd")
-			rootCmd := command.NewRootCommand()
-			outputBuf := bytes.NewBufferString("")
-			rootCmd.SetOut(outputBuf)
-			rootCmd.SetArgs([]string{"keys", db.Path(), tc.testBucket})
-			err = rootCmd.Execute()
-			require.NoError(t, err)
-
-			t.Log("Checking output")
-			output, err := io.ReadAll(outputBuf)
-			require.NoError(t, err)
-			require.Equalf(t, tc.expected, string(output), "unexpected stdout:\n\n%s", string(output))
+			res := runCLI(t, "keys", db.Path(), tc.testBucket)
+			require.NoError(t, res.err)
+			require.Equalf(t, tc.expected, res.stdout, "unexpected stdout:\n\n%s", res.stdout)
 		})
 	}
 }
 
 func TestKeyCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("requires at least 2 arg(s), only received 0")
-	rootCmd := command.NewRootCommand()
-	rootCmd.SetArgs([]string{"keys"})
-	err := rootCmd.Execute()
-	require.ErrorContains(t, err, expErr.Error())
+	res := runCLI(t, "keys")
+	require.Error(t, res.err)
+	require.Contains(t, res.err.Error(), "expected \"<path> <buckets> ...\"")
 }

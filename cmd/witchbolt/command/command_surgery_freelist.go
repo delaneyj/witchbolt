@@ -4,41 +4,27 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
-
 	"github.com/delaneyj/witchbolt"
 	"github.com/delaneyj/witchbolt/internal/common"
 	"github.com/delaneyj/witchbolt/internal/surgeon"
 )
 
-func newSurgeryFreelistCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "freelist <subcommand>",
-		Short: "freelist related surgery commands",
-	}
-
-	cmd.AddCommand(newSurgeryFreelistAbandonCommand())
-	cmd.AddCommand(newSurgeryFreelistRebuildCommand())
-
-	return cmd
+type SurgeryFreelistCmd struct {
+	Abandon SurgeryFreelistAbandonCmd `cmd:"" help:"Abandon the freelist from both meta pages."`
+	Rebuild SurgeryFreelistRebuildCmd `cmd:"" help:"Rebuild the freelist."`
 }
 
-func newSurgeryFreelistAbandonCommand() *cobra.Command {
-	var o surgeryBaseOptions
-	abandonFreelistCmd := &cobra.Command{
-		Use:   "abandon <witchbolt-file>",
-		Short: "Abandon the freelist from both meta pages",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryFreelistAbandonFunc(args[0], o)
-		},
-	}
-	o.AddFlags(abandonFreelistCmd.Flags())
+type SurgeryFreelistAbandonCmd struct {
+	Src    string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output string `name:"output" required:"" help:"Path to the output database file" type:"path"`
+}
 
-	return abandonFreelistCmd
+func (c *SurgeryFreelistAbandonCmd) Run() error {
+	cfg := surgeryBaseOptions{outputDBFilePath: c.Output}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return surgeryFreelistAbandonFunc(c.Src, cfg)
 }
 
 func surgeryFreelistAbandonFunc(srcDBPath string, cfg surgeryBaseOptions) error {
@@ -58,22 +44,17 @@ func surgeryFreelistAbandonFunc(srcDBPath string, cfg surgeryBaseOptions) error 
 	return nil
 }
 
-func newSurgeryFreelistRebuildCommand() *cobra.Command {
-	var o surgeryBaseOptions
-	rebuildFreelistCmd := &cobra.Command{
-		Use:   "rebuild <witchbolt-file>",
-		Short: "Rebuild the freelist",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return err
-			}
-			return surgeryFreelistRebuildFunc(args[0], o)
-		},
-	}
-	o.AddFlags(rebuildFreelistCmd.Flags())
+type SurgeryFreelistRebuildCmd struct {
+	Src    string `arg:"" help:"Path to witchbolt database file" type:"path"`
+	Output string `name:"output" required:"" help:"Path to the output database file" type:"path"`
+}
 
-	return rebuildFreelistCmd
+func (c *SurgeryFreelistRebuildCmd) Run() error {
+	cfg := surgeryBaseOptions{outputDBFilePath: c.Output}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return surgeryFreelistRebuildFunc(c.Src, cfg)
 }
 
 func surgeryFreelistRebuildFunc(srcDBPath string, cfg surgeryBaseOptions) error {

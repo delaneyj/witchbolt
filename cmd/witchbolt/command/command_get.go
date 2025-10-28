@@ -2,66 +2,47 @@ package command
 
 import (
 	"fmt"
-
-	"github.com/spf13/cobra"
+	"os"
 
 	"github.com/delaneyj/witchbolt"
 	"github.com/delaneyj/witchbolt/errors"
 )
 
-type getOptions struct {
-	parseFormat string
-	format      string
+type GetCmd struct {
+	Path        string   `arg:"" help:"Path to witchbolt database file" type:"path"`
+	BucketKey   []string `arg:"" help:"Bucket path (one or more bucket names) followed by the key to retrieve" placeholder:"bucket [subbucket ...] key"`
+	ParseFormat string   `default:"ascii-encoded" help:"Input format: ascii-encoded|hex"`
+	Format      string   `default:"auto" help:"Output format: auto|ascii-encoded|hex|bytes"`
 }
 
-func newGetCommand() *cobra.Command {
-	var opts getOptions
-
-	cmd := &cobra.Command{
-		Use:   "get PATH [BUCKET..] KEY",
-		Short: "get the value of a key from a (sub)bucket in a witchbolt database",
-		Args:  cobra.MinimumNArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			path := args[0]
-			if path == "" {
-				return ErrPathRequired
-			}
-			buckets := args[1 : len(args)-1]
-			keyStr := args[len(args)-1]
-
-			// validate input parameters
-			if len(buckets) == 0 {
-				return fmt.Errorf("bucket is required: %w", ErrBucketRequired)
-			}
-
-			key, err := parseBytes(keyStr, opts.parseFormat)
-			if err != nil {
-				return err
-			}
-
-			if len(key) == 0 {
-				return fmt.Errorf("key is required: %w", errors.ErrKeyRequired)
-			}
-
-			return getFunc(cmd, path, buckets, key, opts)
-		},
+func (c *GetCmd) Run() error {
+	if c.Path == "" {
+		return ErrPathRequired
 	}
 
-	cmd.Flags().StringVar(&opts.parseFormat, "parse-format", "ascii-encoded", "Input format one of: ascii-encoded|hex")
-	cmd.Flags().StringVar(&opts.format, "format", "auto", "Output format one of: "+FORMAT_MODES+" (default: auto)")
+	if len(c.BucketKey) < 2 {
+		return fmt.Errorf("bucket is required: %w", ErrBucketRequired)
+	}
 
-	return cmd
-}
+	buckets := c.BucketKey[:len(c.BucketKey)-1]
+	keyArg := c.BucketKey[len(c.BucketKey)-1]
 
-// getFunc opens the given witchbolt db file and retrieves the key value from the bucket path.
-func getFunc(cmd *cobra.Command, path string, buckets []string, key []byte, opts getOptions) error {
+	key, err := parseBytes(keyArg, c.ParseFormat)
+	if err != nil {
+		return err
+	}
+
+	if len(key) == 0 {
+		return fmt.Errorf("key is required: %w", errors.ErrKeyRequired)
+	}
+
 	// check if the source DB path is valid
-	if _, err := checkSourceDBPath(path); err != nil {
+	if _, err := checkSourceDBPath(c.Path); err != nil {
 		return err
 	}
 
 	// open the database
-	db, err := witchbolt.Open(path, 0600, &witchbolt.Options{ReadOnly: true})
+	db, err := witchbolt.Open(c.Path, 0600, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -77,6 +58,6 @@ func getFunc(cmd *cobra.Command, path string, buckets []string, key []byte, opts
 		if val == nil {
 			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key))
 		}
-		return writelnBytes(cmd.OutOrStdout(), val, opts.format)
+		return writelnBytes(os.Stdout, val, c.Format)
 	})
 }
