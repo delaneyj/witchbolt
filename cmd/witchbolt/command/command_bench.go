@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/delaneyj/witchbolt"
+	"github.com/valyala/bytebufferpool"
 )
 
 var benchBucketName = []byte("bench")
@@ -286,11 +287,14 @@ func runWritesWithSource(io benchIO, db *witchbolt.DB, options *benchOptions, re
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.fillPercent
 
+			key, keyBuf := sizedBytes(options.keySize)
+			defer bytebufferpool.Put(keyBuf)
+
+			value, valueBuf := sizedBytes(options.valueSize)
+			defer bytebufferpool.Put(valueBuf)
+
 			fmt.Fprintf(io.stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.batchSize; j++ {
-				key := make([]byte, options.keySize)
-				value := make([]byte, options.valueSize)
-
 				// Write key as uint32.
 				binary.BigEndian.PutUint32(key, keySource())
 
@@ -299,7 +303,8 @@ func runWritesWithSource(io benchIO, db *witchbolt.DB, options *benchOptions, re
 					return err
 				}
 				if keys != nil {
-					keys = append(keys, nestedKey{nil, key})
+					keyCopy := append([]byte(nil), key...)
+					keys = append(keys, nestedKey{nil, keyCopy})
 				}
 				results.addCompletedOps(1)
 			}
@@ -323,6 +328,12 @@ func runWritesDeletesWithSource(io benchIO, db *witchbolt.DB, options *benchOpti
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.fillPercent
 
+			key, keyBuf := sizedBytes(options.keySize)
+			defer bytebufferpool.Put(keyBuf)
+
+			value, valueBuf := sizedBytes(options.valueSize)
+			defer bytebufferpool.Put(valueBuf)
+
 			fmt.Fprintf(io.stderr, "Starting delete iteration %d, deleteSize: %d\n", i, deleteSize)
 			for i := int64(0); i < deleteSize && i < int64(len(InsertedKeys)); i++ {
 				if err := b.Delete(InsertedKeys[i]); err != nil {
@@ -334,20 +345,17 @@ func runWritesDeletesWithSource(io benchIO, db *witchbolt.DB, options *benchOpti
 
 			fmt.Fprintf(io.stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.batchSize; j++ {
-
-				key := make([]byte, options.keySize)
-				value := make([]byte, options.valueSize)
-
 				// Write key as uint32.
 				binary.BigEndian.PutUint32(key, keySource())
-				InsertedKeys = append(InsertedKeys, key)
+				InsertedKeys = append(InsertedKeys, append([]byte(nil), key...))
 
 				// Insert key/value.
 				if err := b.Put(key, value); err != nil {
 					return err
 				}
 				if keys != nil {
-					keys = append(keys, nestedKey{nil, key})
+					keyCopy := append([]byte(nil), key...)
+					keys = append(keys, nestedKey{nil, keyCopy})
 				}
 				results.addCompletedOps(1)
 			}
@@ -374,8 +382,8 @@ func runWritesNestedWithSource(io benchIO, db *witchbolt.DB, options *benchOptio
 			}
 			top.FillPercent = options.fillPercent
 
-			// Create bucket key.
-			name := make([]byte, options.keySize)
+			name, nameBuf := sizedBytes(options.keySize)
+			defer bytebufferpool.Put(nameBuf)
 			binary.BigEndian.PutUint32(name, keySource())
 
 			// Create bucket.
@@ -385,11 +393,19 @@ func runWritesNestedWithSource(io benchIO, db *witchbolt.DB, options *benchOptio
 			}
 			b.FillPercent = options.fillPercent
 
+			var bucketCopy []byte
+			if keys != nil {
+				bucketCopy = append([]byte(nil), name...)
+			}
+
+			key, keyBuf := sizedBytes(options.keySize)
+			defer bytebufferpool.Put(keyBuf)
+
+			value, valueBuf := sizedBytes(options.valueSize)
+			defer bytebufferpool.Put(valueBuf)
+
 			fmt.Fprintf(io.stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.batchSize; j++ {
-				var key = make([]byte, options.keySize)
-				var value = make([]byte, options.valueSize)
-
 				// Generate key as uint32.
 				binary.BigEndian.PutUint32(key, keySource())
 
@@ -398,7 +414,8 @@ func runWritesNestedWithSource(io benchIO, db *witchbolt.DB, options *benchOptio
 					return err
 				}
 				if keys != nil {
-					keys = append(keys, nestedKey{name, key})
+					keyCopy := append([]byte(nil), key...)
+					keys = append(keys, nestedKey{bucketCopy, keyCopy})
 				}
 				results.addCompletedOps(1)
 			}

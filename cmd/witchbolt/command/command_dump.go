@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
+	"github.com/valyala/bytebufferpool"
 )
 
 type DumpCmd struct {
@@ -59,7 +60,13 @@ func dumpPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error 
 	const bytesPerLineN = 16
 
 	// read page into buffer.
-	buf := make([]byte, pageSize)
+	size := int(pageSize)
+	if uint64(size) != pageSize {
+		return fmt.Errorf("page size %d exceeds int capacity", pageSize)
+	}
+
+	buf, pooled := sizedBytes(size)
+	defer bytebufferpool.Put(pooled)
 	addr := pageID * uint64(pageSize)
 	if n, err := r.ReadAt(buf, int64(addr)); err != nil {
 		return err

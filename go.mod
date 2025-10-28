@@ -35,6 +35,7 @@ require (
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.43.0 // indirect

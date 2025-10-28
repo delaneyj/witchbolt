@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/valyala/bytebufferpool"
 )
 
 const (
@@ -225,10 +226,14 @@ func ReadMetaPageAt(dbPath string, metaPageId uint32, pageSize uint32) (*common.
 	// pageSize when reading the first meta page, because we always read the
 	// file starting from offset 0. Actually the passed pageSize is 0 when
 	// reading the first meta page in the `surgery meta update` command.
-	buf := make([]byte, 1024)
+	const metaSize = 1024
+	buf, pooled := sizedBytes(metaSize)
+	defer bytebufferpool.Put(pooled)
+
 	n, err := f.ReadAt(buf, int64(metaPageId*pageSize))
 	if n == len(buf) && (err == nil || err == io.EOF) {
-		return common.LoadPageMeta(buf), buf, nil
+		copied := append([]byte(nil), buf...)
+		return common.LoadPageMeta(copied), copied, nil
 	}
 
 	return nil, nil, err
