@@ -1,5 +1,7 @@
 # WitchBolt
-![logo](witch_bolt.webp)
+
+![Witchbolt](/witch_bolt.webp)
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/delaneyj/witchbolt?style=flat-square)](https://goreportcard.com/report/github.com/delaneyj/witchbolt)
 [![Go Reference](https://pkg.go.dev/badge/github.com/delaneyj/witchbolt.svg)](https://pkg.go.dev/github.com/delaneyj/witchbolt)
 [![Releases](https://img.shields.io/github/release/delaneyj/witchbolt/all.svg?style=flat-square)](https://github.com/delaneyj/witchbolt/releases)
@@ -26,8 +28,12 @@ and every Go tool command in this README reflects the new module identity.
   Go community.
 - **WitchBolt** continues the lineage with a willingness to add new
   capabilities (streaming replication, pluggable observers, tighter cloud
-  integrations) even when they nudge the public surface. The rename clarifies
-  that consumers opting into WitchBolt are choosing that faster-moving track.
+  integrations) even when they nudge the public surface. The rename creates
+  room to iterate without binding etcd-io to the same upstream compatibility
+  guarantees.
+- The CLI has moved from Cobra to a Kong-powered surface with a Charm stack TUI
+  (`witchbolt browse`), reflecting the new module identity while giving us the
+  latitude to evolve UX without surprising upstream users.
 - The streaming subsystem borrows from [Litestream](https://github.com/benbjohnson/litestream)
   for its S3 and filesystem replica clients; the upstream project is MIT
   licensed and credited in `LICENSE` and the docs.
