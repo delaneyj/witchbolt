@@ -22,12 +22,19 @@ import (
 
 // SFTPReplicaConfig configures the SFTP replica backend.
 type SFTPReplicaConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
-	KeyPath  string `json:"keyPath" yaml:"key_path"`
-	Path     string `json:"path" yaml:"path"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	KeyPath  string `json:"keyPath"`
+	Path     string `json:"path"`
+}
+
+func (cfg *SFTPReplicaConfig) buildReplica(ctx context.Context) (Replica, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("sftp replica config is nil")
+	}
+	return NewSFTPReplica(ctx, cfg)
 }
 
 // SFTPReplica persists artefacts over SFTP.
@@ -41,7 +48,7 @@ type SFTPReplica struct {
 }
 
 // NewSFTPReplica constructs an SFTP replica backed by the provided configuration.
-func NewSFTPReplica(_ context.Context, name string, cfg *SFTPReplicaConfig) (*SFTPReplica, error) {
+func NewSFTPReplica(_ context.Context, cfg *SFTPReplicaConfig) (*SFTPReplica, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("sftp replica config is nil")
 	}
@@ -59,11 +66,7 @@ func NewSFTPReplica(_ context.Context, name string, cfg *SFTPReplicaConfig) (*SF
 	if clean.Path == "." {
 		clean.Path = ""
 	}
-	replicaName := name
-	if replicaName == "" {
-		replicaName = formatSFTPReplicaName(clean)
-	}
-	r := &SFTPReplica{name: replicaName, cfg: clean}
+	r := &SFTPReplica{name: formatSFTPReplicaName(clean), cfg: clean}
 	return r, nil
 }
 

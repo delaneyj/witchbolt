@@ -35,9 +35,6 @@ var CLI struct {
 	// Performance commands
 	Bench BenchCmd `cmd:"" help:"Benchmark the database"`
 
-	// Streaming commands
-	Stream StreamCmd `cmd:"" help:"Stream database changes"`
-
 	// Interactive commands
 	Browse BrowseCmd `cmd:"" help:"Interactive database browser (TUI)"`
 }

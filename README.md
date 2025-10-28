@@ -70,8 +70,7 @@ S3-compatible object storage (AWS, GCP, Azure, MinIO, etc.) can act as a
 replica, and wired up SFTP & NATS JetStream object storage clients for
 environmental parity. Snapshots, retention, Zstandard
 compression by default (set `codec: none` to disable), and automatic restores are supported
-out of the box. See `stream/README.md` for architecture details and
-the `witchbolt stream restore` CLI command for one-shot restores from replica storage.
+out of the box. See `stream/README.md` for architecture details.
 
 To enable stream replication during `witchbolt.Open`, supply a page-flush observer:
 
@@ -81,23 +80,23 @@ db, err := witchbolt.Open(path, 0600, &witchbolt.Options{
 	stream.Observer(context.Background(), stream.Config{
 		Compression: stream.CompressionConfig{Codec: stream.CompressionZSTD, Level: 6},
 		Replicas: []stream.ReplicaConfig{
-			{Type: "s3", S3: &stream.S3CompatibleConfig{
+			&stream.S3CompatibleConfig{
 				Bucket:   "example",
 				Endpoint: "s3.us-east-1.amazonaws.com",
 				Region:   "us-east-1",
-			}},
-			{Type: "sftp", SFTP: &stream.SFTPReplicaConfig{
+			},
+			&stream.SFTPReplicaConfig{
 				Host:    "backup.example.com",
 				User:    "replicator",
 				KeyPath: "/etc/witchbolt/sftp_key",
 				Path:    "backups/db",
-			}},
-			{Type: "nats", NATS: &stream.NATSReplicaConfig{
-				URL:           "nats://nats.example.com:4222",
-				Stream:        "litestream-backups",
-				SubjectPrefix: "cluster-a/db",
-				Creds:         "/etc/witchbolt/nats.creds",
-			}},
+			},
+			&stream.NATSReplicaConfig{
+				URL:    "nats://nats.example.com:4222",
+				Bucket: "litestream-backups",
+				Prefix: "cluster-a/db",
+				Creds:  "/etc/witchbolt/nats.creds",
+			},
 		},
 	}),
 	},

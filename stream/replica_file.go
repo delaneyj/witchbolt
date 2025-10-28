@@ -24,11 +24,18 @@ type FileReplica struct {
 
 // FileReplicaConfig defines the local filesystem replica behaviour.
 type FileReplicaConfig struct {
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path"`
+}
+
+func (cfg *FileReplicaConfig) buildReplica(_ context.Context) (Replica, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("file replica config is nil")
+	}
+	return NewFileReplica(cfg)
 }
 
 // NewFileReplica constructs a FileReplica backed by a directory tree.
-func NewFileReplica(name string, cfg *FileReplicaConfig) (*FileReplica, error) {
+func NewFileReplica(cfg *FileReplicaConfig) (*FileReplica, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("file replica config is nil")
 	}
@@ -38,10 +45,7 @@ func NewFileReplica(name string, cfg *FileReplicaConfig) (*FileReplica, error) {
 	if err := os.MkdirAll(cfg.Path, 0o755); err != nil {
 		return nil, fmt.Errorf("create replica path: %w", err)
 	}
-	replicaName := name
-	if replicaName == "" {
-		replicaName = cfg.Path
-	}
+	replicaName := cfg.Path
 	return &FileReplica{
 		name:     replicaName,
 		basePath: cfg.Path,

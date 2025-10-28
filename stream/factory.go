@@ -3,7 +3,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/delaneyj/witchbolt"
 )
@@ -11,21 +10,11 @@ import (
 // BuildReplicas constructs replica implementations from configuration.
 func BuildReplicas(ctx context.Context, cfg Config) ([]Replica, error) {
 	var replicas []Replica
-	for _, rc := range cfg.Replicas {
-		var replica Replica
-		var err error
-		switch strings.ToLower(rc.Type) {
-		case "file":
-			replica, err = NewFileReplica(rc.Name, rc.File)
-		case "s3":
-			replica, err = NewS3CompatibleReplica(ctx, rc.Name, rc.S3)
-		case "sftp":
-			replica, err = NewSFTPReplica(ctx, rc.Name, rc.SFTP)
-		case "nats":
-			replica, err = NewNATSReplica(ctx, rc.Name, rc.NATS)
-		default:
-			err = fmt.Errorf("unknown replica type: %s", rc.Type)
+	for i, rc := range cfg.Replicas {
+		if rc == nil {
+			return nil, fmt.Errorf("replica config at index %d is nil", i)
 		}
+		replica, err := rc.buildReplica(ctx)
 		if err != nil {
 			return nil, err
 		}

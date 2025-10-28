@@ -41,10 +41,11 @@ compression or `codec: "zstd"` (default) with an optional quality `level`
 (mapped to the closest Zstandard encoder level). These options apply globally
 to ensure deterministic restores.
 
-```yaml
-compression:
-  codec: zstd
-  level: 6  # mapped to the nearest zstd encoder level
+```go
+Compression: stream.CompressionConfig{
+	Codec: stream.CompressionZSTD,
+	Level: 6,
+}
 ```
 
 ## Usage
@@ -58,27 +59,27 @@ db, err := witchbolt.Open(path, 0600, &witchbolt.Options{
 			ShadowDir:        "/var/lib/myapp/stream",
 			SnapshotInterval: 5 * time.Minute,
 			Compression:      stream.CompressionConfig{Codec: stream.CompressionZSTD, Level: 6},
-			Replicas: []stream.ReplicaConfig{
-				{Type: "file", File: &stream.FileReplicaConfig{Path: "/backups"}},
-				{Type: "s3", S3: &stream.S3CompatibleConfig{
-					Bucket:   "example-bucket",
-					Prefix:   "stream",
-					Endpoint: "s3.us-east-1.amazonaws.com",
-					Region:   "us-east-1",
-				}},
-				{Type: "sftp", SFTP: &stream.SFTPReplicaConfig{
-					Host: "backup.example.com",
-					User: "replicator",
-					KeyPath: "/etc/witchbolt/sftp_key",
-					Path: "backups/db",
-				}},
-				{Type: "nats", NATS: &stream.NATSReplicaConfig{
-					URL:           "nats://nats.example.com:4222",
-					Stream:        "litestream-backups",
-					SubjectPrefix: "cluster-a/db",
-					Creds:         "/etc/witchbolt/nats.creds",
-				}},
+		Replicas: []stream.ReplicaConfig{
+			&stream.FileReplicaConfig{Path: "/backups"},
+			&stream.S3CompatibleConfig{
+				Bucket:   "example-bucket",
+				Prefix:   "stream",
+				Endpoint: "s3.us-east-1.amazonaws.com",
+				Region:   "us-east-1",
 			},
+			&stream.SFTPReplicaConfig{
+				Host:    "backup.example.com",
+				User:    "replicator",
+				KeyPath: "/etc/witchbolt/sftp_key",
+				Path:    "backups/db",
+			},
+			&stream.NATSReplicaConfig{
+				URL:    "nats://nats.example.com:4222",
+				Bucket: "litestream-backups",
+				Prefix: "cluster-a/db",
+				Creds:  "/etc/witchbolt/nats.creds",
+			},
+		},
 		}),
 	},
 })

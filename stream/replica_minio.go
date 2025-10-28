@@ -19,15 +19,22 @@ var errS3ObjectNotFound = errors.New("s3 object not found")
 
 // S3CompatibleConfig configures a generic S3-compatible backend.
 type S3CompatibleConfig struct {
-	Endpoint       string `json:"endpoint" yaml:"endpoint"`
-	Region         string `json:"region" yaml:"region"`
-	Bucket         string `json:"bucket" yaml:"bucket"`
-	Prefix         string `json:"prefix" yaml:"prefix"`
-	AccessKey      string `json:"accessKey" yaml:"access_key"`
-	SecretKey      string `json:"secretKey" yaml:"secret_key"`
-	SessionToken   string `json:"sessionToken" yaml:"session_token"`
-	Insecure       bool   `json:"insecure" yaml:"insecure"`
-	ForcePathStyle bool   `json:"forcePathStyle" yaml:"force_path_style"`
+	Endpoint       string `json:"endpoint"`
+	Region         string `json:"region"`
+	Bucket         string `json:"bucket"`
+	Prefix         string `json:"prefix"`
+	AccessKey      string `json:"accessKey"`
+	SecretKey      string `json:"secretKey"`
+	SessionToken   string `json:"sessionToken"`
+	Insecure       bool   `json:"insecure"`
+	ForcePathStyle bool   `json:"forcePathStyle"`
+}
+
+func (cfg *S3CompatibleConfig) buildReplica(ctx context.Context) (Replica, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("s3 replica config is nil")
+	}
+	return NewS3CompatibleReplica(ctx, cfg)
 }
 
 // S3CompatibleReplica stores artefacts in any S3-compatible object storage.
@@ -39,7 +46,7 @@ type S3CompatibleReplica struct {
 }
 
 // NewS3CompatibleReplica constructs an S3-compatible replica backed by MinIO client.
-func NewS3CompatibleReplica(ctx context.Context, name string, cfg *S3CompatibleConfig) (*S3CompatibleReplica, error) {
+func NewS3CompatibleReplica(ctx context.Context, cfg *S3CompatibleConfig) (*S3CompatibleReplica, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("s3 replica config is nil")
 	}
@@ -66,13 +73,9 @@ func NewS3CompatibleReplica(ctx context.Context, name string, cfg *S3CompatibleC
 	if err != nil {
 		return nil, err
 	}
-	replicaName := name
-	if replicaName == "" {
-		if cfg.Prefix != "" {
-			replicaName = fmt.Sprintf("s3://%s/%s", cfg.Bucket, cfg.Prefix)
-		} else {
-			replicaName = fmt.Sprintf("s3://%s", cfg.Bucket)
-		}
+	replicaName := fmt.Sprintf("s3://%s", cfg.Bucket)
+	if cfg.Prefix != "" {
+		replicaName = fmt.Sprintf("s3://%s/%s", cfg.Bucket, cfg.Prefix)
 	}
 	return &S3CompatibleReplica{name: replicaName, client: client, cfg: *cfg}, nil
 }

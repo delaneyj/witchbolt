@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -14,18 +15,24 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nkeys"
 )
 
 // NATSReplicaConfig configures the NATS JetStream replica backend.
 type NATSReplicaConfig struct {
-	URL           string   `json:"url" yaml:"url"`
-	Stream        string   `json:"stream" yaml:"stream"`
-	SubjectPrefix string   `json:"subjectPrefix" yaml:"subject_prefix"`
-	User          string   `json:"user" yaml:"user"`
-	Password      string   `json:"password" yaml:"password"`
-	Creds         string   `json:"creds" yaml:"creds"`
-	NKey          string   `json:"nkey" yaml:"nkey"`
-	TLSCA         []string `json:"tlsCa" yaml:"tls_ca"`
+	URL     string   `json:"url"`
+	Bucket  string   `json:"bucket"`
+	Prefix  string   `json:"prefix"`
+	Creds   string   `json:"creds"`
+	NKey    string   `json:"nkey"`
+	RootCAs []string `json:"rootCAs"`
+}
+
+func (cfg *NATSReplicaConfig) buildReplica(ctx context.Context) (Replica, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("nats replica config is nil")
+	}
+	return NewNATSReplica(ctx, cfg)
 }
 
 // NATSReplica persists artefacts via NATS JetStream object storage.
@@ -40,23 +47,16 @@ type NATSReplica struct {
 }
 
 // NewNATSReplica constructs a JetStream-backed replica using the provided configuration.
-func NewNATSReplica(_ context.Context, name string, cfg *NATSReplicaConfig) (*NATSReplica, error) {
+func NewNATSReplica(_ context.Context, cfg *NATSReplicaConfig) (*NATSReplica, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("nats replica config is nil")
 	}
-	if cfg.Stream == "" {
-		return nil, fmt.Errorf("nats stream is required")
-	}
-	if cfg.NKey != "" {
-		return nil, fmt.Errorf("nats nkey authentication is not supported yet")
+	if cfg.Bucket == "" {
+		return nil, fmt.Errorf("nats bucket is required")
 	}
 	clean := *cfg
-	clean.SubjectPrefix = strings.Trim(clean.SubjectPrefix, "/")
-	replicaName := name
-	if replicaName == "" {
-		replicaName = formatNATSReplicaName(clean)
-	}
-	return &NATSReplica{name: replicaName, cfg: clean}, nil
+	clean.Prefix = strings.Trim(clean.Prefix, "/")
+	return &NATSReplica{name: formatNATSReplicaName(clean), cfg: clean}, nil
 }
 
 // Name implements Replica.
@@ -84,7 +84,7 @@ func (r *NATSReplica) PutSnapshot(ctx context.Context, generation string, snapsh
 	if err != nil {
 		return err
 	}
-	objectName := prefixedKey(r.cfg.SubjectPrefix, snapshotObjectName(generation, snapshot.Header.CreatedAt, snapshot.Header.TxID))
+	objectName := prefixedKey(r.cfg.Prefix, snapshotObjectName(generation, snapshot.Header.CreatedAt, snapshot.Header.TxID))
 	if _, err := store.PutBytes(ctx, objectName, snapshot.Data); err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (r *NATSReplica) PutSegment(ctx context.Context, generation string, segment
 	if err != nil {
 		return err
 	}
-	objectName := prefixedKey(r.cfg.SubjectPrefix, segmentObjectName(generation, segment.Header.TxID))
+	objectName := prefixedKey(r.cfg.Prefix, segmentObjectName(generation, segment.Header.TxID))
 	if _, err := store.PutBytes(ctx, objectName, segment.Data); err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (r *NATSReplica) Prune(ctx context.Context, generation string, retention Re
 	if err != nil {
 		return err
 	}
-	return pruneNATSGeneration(ctx, store, r.cfg.SubjectPrefix, generation, retention.SnapshotRetention)
+	return pruneNATSGeneration(ctx, store, r.cfg.Prefix, generation, retention.SnapshotRetention)
 }
 
 // FetchSnapshot downloads and decodes the referenced snapshot object.
@@ -207,7 +207,7 @@ func (r *NATSReplica) updateState(ctx context.Context, store jetstream.ObjectSto
 	if err != nil {
 		return err
 	}
-	stateKey := prefixedKey(r.cfg.SubjectPrefix, stateFileName)
+	stateKey := prefixedKey(r.cfg.Prefix, stateFileName)
 	if err := deleteObjectIfExists(ctx, store, stateKey); err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (r *NATSReplica) updateState(ctx context.Context, store jetstream.ObjectSto
 }
 
 func (r *NATSReplica) loadState(ctx context.Context, store jetstream.ObjectStore) (*RestoreState, error) {
-	stateKey := prefixedKey(r.cfg.SubjectPrefix, stateFileName)
+	stateKey := prefixedKey(r.cfg.Prefix, stateFileName)
 	data, err := store.GetBytes(ctx, stateKey)
 	if err != nil {
 		if isNATSNotFound(err) {
@@ -241,12 +241,20 @@ func (r *NATSReplica) connect(ctx context.Context) (jetstream.ObjectStore, error
 		nats.Name("witchbolt-stream"),
 	}
 	if r.cfg.Creds != "" {
-		opts = append(opts, nats.UserCredentials(r.cfg.Creds))
-	} else if r.cfg.User != "" {
-		opts = append(opts, nats.UserInfo(r.cfg.User, r.cfg.Password))
+		if r.cfg.NKey != "" {
+			opts = append(opts, nats.UserCredentials(r.cfg.Creds, r.cfg.NKey))
+		} else {
+			opts = append(opts, nats.UserCredentials(r.cfg.Creds))
+		}
+	} else if r.cfg.NKey != "" {
+		nkeyOpt, err := natsNKeyOption(r.cfg.NKey)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, nkeyOpt)
 	}
-	if len(r.cfg.TLSCA) > 0 {
-		opts = append(opts, nats.RootCAs(r.cfg.TLSCA...))
+	if len(r.cfg.RootCAs) > 0 {
+		opts = append(opts, nats.RootCAs(r.cfg.RootCAs...))
 	}
 	url := r.cfg.URL
 	if url == "" {
@@ -261,10 +269,10 @@ func (r *NATSReplica) connect(ctx context.Context) (jetstream.ObjectStore, error
 		nc.Close()
 		return nil, err
 	}
-	store, err := js.ObjectStore(ctx, r.cfg.Stream)
+	store, err := js.ObjectStore(ctx, r.cfg.Bucket)
 	if err != nil {
 		nc.Close()
-		return nil, fmt.Errorf("jetstream object store %q: %w", r.cfg.Stream, err)
+		return nil, fmt.Errorf("jetstream object store %q: %w", r.cfg.Bucket, err)
 	}
 	r.nc = nc
 	r.js = js
@@ -282,10 +290,63 @@ func formatNATSReplicaName(cfg NATSReplicaConfig) string {
 		uri = parsed.String()
 	}
 	uri = strings.TrimRight(uri, "/")
-	if cfg.Stream != "" {
-		uri = uri + "/" + cfg.Stream
+	if cfg.Bucket != "" {
+		uri = uri + "/" + cfg.Bucket
+		if cfg.Prefix != "" {
+			uri = uri + "/" + strings.Trim(cfg.Prefix, "/")
+		}
 	}
 	return uri
+}
+
+func natsNKeyOption(seedPath string) (nats.Option, error) {
+	data, err := os.ReadFile(seedPath)
+	if err != nil {
+		return nil, fmt.Errorf("read nkey seed: %w", err)
+	}
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return nil, fmt.Errorf("nkey seed is empty")
+	}
+	if strings.HasPrefix(trimmed, "-----BEGIN") {
+		kp, err := nkeys.ParseDecoratedNKey(data)
+		if err != nil {
+			return nil, fmt.Errorf("parse decorated nkey: %w", err)
+		}
+		pub, err := kp.PublicKey()
+		if err != nil {
+			return nil, fmt.Errorf("derive nkey public key: %w", err)
+		}
+		return nats.Nkey(pub, func(nonce []byte) ([]byte, error) {
+			sig, err := kp.Sign(nonce)
+			if err != nil {
+				return nil, err
+			}
+			return sig, nil
+		}), nil
+	}
+	kp, err := nkeys.FromSeed([]byte(trimmed))
+	if err != nil {
+		return nil, fmt.Errorf("load nkey seed: %w", err)
+	}
+	pub, err := kp.PublicKey()
+	if err != nil {
+		return nil, fmt.Errorf("derive nkey public key: %w", err)
+	}
+	kp.Wipe()
+	seed := trimmed
+	return nats.Nkey(pub, func(nonce []byte) ([]byte, error) {
+		kp, err := nkeys.FromSeed([]byte(seed))
+		if err != nil {
+			return nil, err
+		}
+		defer kp.Wipe()
+		sig, err := kp.Sign(nonce)
+		if err != nil {
+			return nil, err
+		}
+		return sig, nil
+	}), nil
 }
 
 func pruneNATSGeneration(ctx context.Context, store jetstream.ObjectStore, prefix, generation string, retention time.Duration) error {
