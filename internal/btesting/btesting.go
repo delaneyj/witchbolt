@@ -51,7 +51,7 @@ func MustOpenDBWithOption(t testing.TB, f string, o *witchbolt.Options) *DB {
 }
 
 func OpenDBWithOption(t testing.TB, f string, o *witchbolt.Options) (*DB, error) {
-	t.Logf("Opening bbolt DB at: %s", f)
+	t.Logf("Opening witchbolt DB at: %s", f)
 	if o == nil {
 		o = witchbolt.DefaultOptions
 	}
@@ -93,7 +93,7 @@ func (db *DB) Close() error {
 		if *statsFlag {
 			db.PrintStats()
 		}
-		db.t.Logf("Closing bbolt DB at: %s", db.f)
+		db.t.Logf("Closing witchbolt DB at: %s", db.f)
 		err := db.DB.Close()
 		if err != nil {
 			return err
@@ -123,7 +123,7 @@ func (db *DB) MustReopen() {
 	if db.DB != nil {
 		panic("Please call Close() before MustReopen()")
 	}
-	db.t.Logf("Reopening bbolt DB at: %s", db.f)
+	db.t.Logf("Reopening witchbolt DB at: %s", db.f)
 	indb, err := witchbolt.Open(db.Path(), 0600, db.o)
 	require.NoError(db.t, err)
 	db.DB = indb

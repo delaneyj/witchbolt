@@ -1,25 +1,24 @@
 version: '3'
 
 vars:
-  GOFILES: |
-    {{- shell "find . -name '*.go'" -}}
+  TIMEOUT: '{{default "30m" .TIMEOUT}}'
+  BIN_DIR: bin
+  BINARY: witchbolt
 
 tasks:
   fmt:
-    desc: Verify Go formatting (gofmt/goimports)
+    desc: Verify Go formatting
     cmds:
-      - echo "Verifying gofmt, failures can be fixed with ./scripts/fix.sh"
-      - cmd: gofmt -l -s -d {{.GOFILES}}
-        silent: true
-        ignore_error: true
-      - cmd: bash -lc '[ -z "$(gofmt -l -s {{.GOFILES}})" ]'
-        silent: true
-      - echo "Verifying goimports, failures can be fixed with ./scripts/fix.sh"
-      - cmd: go tool golang.org/x/tools/cmd/goimports -l -d {{.GOFILES}}
-        silent: true
-        ignore_error: true
-      - cmd: bash -lc '[ -z "$(go tool golang.org/x/tools/cmd/goimports -l {{.GOFILES}})" ]'
-        silent: true
+      - echo "Checking gofmt..."
+      - test -z "$(gofmt -l -s .)"
+      - echo "Checking goimports..."
+      - test -z "$(go tool golang.org/x/tools/cmd/goimports -l .)"
+
+  fmt:fix:
+    desc: Fix Go formatting
+    cmds:
+      - gofmt -l -s -w .
+      - go tool golang.org/x/tools/cmd/goimports -l -w .
 
   lint:
     desc: Run golangci-lint
@@ -27,80 +26,85 @@ tasks:
       - golangci-lint run ./...
 
   test:
-    desc: Run go test matrix for hash/array freelists
+    desc: Run tests for both freelist types
     vars:
-      TESTFLAGS_RACE: '{{default "false" .ENABLE_RACE}}'
-      TESTFLAGS_CPU: '{{default "" .CPU}}'
-      EXTRA: '{{default "" .EXTRA_TESTFLAGS}}'
-      TIMEOUT: '{{default "30m" .TIMEOUT}}'
+      RACE: '{{if eq .ENABLE_RACE "true"}}-race{{end}}'
+      CPU: '{{if .CPU}}-cpu={{.CPU}}{{end}}'
     cmds:
-      - echo "hashmap freelist test"
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} -timeout {{.TIMEOUT}}
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./internal/... -timeout {{.TIMEOUT}}
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./cmd/bbolt/... -timeout {{.TIMEOUT}}
-      - echo "array freelist test"
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} -timeout {{.TIMEOUT}}
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./internal/... -timeout {{.TIMEOUT}}
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./cmd/bbolt/... -timeout {{.TIMEOUT}}
+      - for: [hashmap, array]
+        cmd: |
+          echo "{{.ITEM}} freelist test"
+          WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE={{.ITEM}} go test -v \
+            {{.RACE}} {{.CPU}} {{.EXTRA_TESTFLAGS}} -timeout {{.TIMEOUT}} ./...
 
   coverage:
     desc: Generate coverage profiles for freelists
     cmds:
-      - echo "hashmap freelist test"
-      - TEST_FREELIST_TYPE=hashmap go test -v -timeout {{default "30m" .TIMEOUT}} \
-          -coverprofile cover-freelist-hashmap.out -covermode atomic
-      - echo "array freelist test"
-      - TEST_FREELIST_TYPE=array go test -v -timeout {{default "30m" .TIMEOUT}} \
-          -coverprofile cover-freelist-array.out -covermode atomic
+      - for: [hashmap, array]
+        cmd: |
+          echo "{{.ITEM}} freelist coverage"
+          TEST_FREELIST_TYPE={{.ITEM}} go test -v -timeout {{.TIMEOUT}} \
+            -coverprofile cover-freelist-{{.ITEM}}.out -covermode atomic
 
   build:
     desc: Build CLI binary
     cmds:
-      - go build -o bin/bbolt ./cmd/bbolt
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BIN_DIR}}/{{.BINARY}} ./cmd/witchbolt
 
   clean:
     desc: Clean build artifacts
     cmds:
-      - rm -f ./bin/bbolt
+      - rm -rf {{.BIN_DIR}}
+      - rm -f cover-*.out
+
+  test-failpoint:
+    desc: Run failpoint tests
+    deps: [gofail-enable]
+    cmds:
+      - defer: {task: gofail-disable}
+      - for: [hashmap, array]
+        cmd: |
+          echo "[failpoint] {{.ITEM}} freelist test"
+          WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE={{.ITEM}} go test -v -timeout 30m ./tests/failpoint
 
   gofail-enable:
     desc: Enable gofail failpoints
     cmds:
       - go tool go.etcd.io/gofail enable .
+    status:
+      - test -f db.fail.go
 
   gofail-disable:
     desc: Disable gofail failpoints
     cmds:
       - go tool go.etcd.io/gofail disable .
 
-  test-failpoint:
-    desc: Run failpoint tests
-    cmds:
-      - echo "[failpoint] hashmap freelist test"
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v -timeout 30m ./tests/failpoint
-      - echo "[failpoint] array freelist test"
-      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v -timeout 30m ./tests/failpoint
-
   bench:
-    desc: Run Go benchmarks (set PKG=./... BENCH='BenchmarkName')
+    desc: Run benchmarks (PKG=./... BENCH=BenchmarkName)
     vars:
       PKG: '{{default "./..." .PKG}}'
       BENCH: '{{default "." .BENCH}}'
-      EXTRA: '{{default "" .EXTRA}}'
     cmds:
-      - go test -run ^$ -bench {{.BENCH}} -benchmem {{.PKG}} {{.EXTRA}}
+      - go test -run=^$ -bench={{.BENCH}} -benchmem {{.PKG}} {{.EXTRA}}
 
   test-robustness:
-    desc: Run robustness test suite (requires sudo)
+    desc: Run robustness tests (requires sudo)
     deps: [gofail-enable, build]
     cmds:
+      - defer: {task: gofail-disable}
       - sudo env PATH=$$PATH go test -v ./tests/dmflakey -test.root
-      - sudo env PATH=$(PWD)/bin:$$PATH go test -v {{default "" .ROBUSTNESS_TESTFLAGS}} ./tests/robustness -test.root
+      - sudo env PATH={{.ROOT_DIR}}/{{.BIN_DIR}}:$$PATH go test -v {{.ROBUSTNESS_TESTFLAGS}} ./tests/robustness -test.root
 
   test-benchmark-compare:
     desc: Compare benchmark results against REF
-    vars:
-      REF: '{{default "" .REF}}'
     cmds:
       - git fetch
       - ./scripts/compare_benchmarks.sh {{.REF}}
+
+  ci:
+    desc: Run all CI checks
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test

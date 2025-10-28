@@ -27,7 +27,7 @@ WitchBolt continues a lineage of MIT-licensed projects and incorporates
 MIT-licensed code from:
 
 - `github.com/benbjohnson/bolt`
-- `github.com/etcd-io/bbolt`
+- `github.com/etcd-io/witchbolt`
 
 Portions of the `stream` module (replica clients, compression helpers, restore
 logic) are derived from `github.com/benbjohnson/litestream`, which is provided

@@ -67,7 +67,7 @@ func TestOpen(t *testing.T) {
 	}
 }
 
-// Regression validation for https://github.com/etcd-io/bbolt/pull/122.
+// Regression validation for https://github.com/etcd-io/witchbolt/pull/122.
 // Tests multiple goroutines simultaneously opening a database.
 func TestOpen_MultipleGoroutines(t *testing.T) {
 	if testing.Short() {
@@ -1509,7 +1509,7 @@ func createFilledDB(t testing.TB, o *witchbolt.Options, allocSize int, numKeys i
 }
 
 // Ensure that a database cannot exceed its maximum size
-// https://github.com/etcd-io/bbolt/issues/928
+// https://github.com/etcd-io/witchbolt/issues/928
 func TestDB_MaxSizeNotExceeded(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -1560,7 +1560,7 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 
 // Ensure that opening a database that is beyond the maximum size succeeds
 // The maximum size should only apply to growing the data file
-// https://github.com/etcd-io/bbolt/issues/928
+// https://github.com/etcd-io/witchbolt/issues/928
 func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	// Open a data file.
 	db := createFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000, 1KB keys
@@ -1579,7 +1579,7 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	require.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size
-	t.Logf("Reopening bbolt DB at: %s", path)
+	t.Logf("Reopening witchbolt DB at: %s", path)
 	db, err = btesting.OpenDBWithOption(t, path, &witchbolt.Options{
 		MaxSize: 1,
 	})
@@ -1592,7 +1592,7 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 // Ensure that opening a database that is beyond the maximum size succeeds,
 // even when InitialMmapSize is above the limit (mmaps should not affect file size)
 // This test exists for platforms where Truncate should not be called during mmap
-// https://github.com/etcd-io/bbolt/issues/928
+// https://github.com/etcd-io/witchbolt/issues/928
 func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// In Windows, the file must be expanded to the mmap initial size,
@@ -1613,7 +1613,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 	require.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size
-	t.Logf("Reopening bbolt DB at: %s", path)
+	t.Logf("Reopening witchbolt DB at: %s", path)
 	db, err = btesting.OpenDBWithOption(t, path, &witchbolt.Options{
 		MaxSize:         1,
 		InitialMmapSize: int(minimumSizeForTest) * 2,
@@ -1627,7 +1627,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 // Ensure that when InitialMmapSize is above the limit, opening a database
 // that is beyond the maximum size fails in Windows.
 // In Windows, the file must be expanded to the mmap initial size.
-// https://github.com/etcd-io/bbolt/issues/928
+// https://github.com/etcd-io/witchbolt/issues/928
 func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		// This test is only relevant on Windows
@@ -1648,7 +1648,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 
 	// Now try to re-open the database with an extremely small max size and
 	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
-	t.Logf("Reopening bbolt DB at: %s", path)
+	t.Logf("Reopening witchbolt DB at: %s", path)
 	_, err = btesting.OpenDBWithOption(t, path, &witchbolt.Options{
 		MaxSize:         1,
 		InitialMmapSize: int(newSz) * 2,

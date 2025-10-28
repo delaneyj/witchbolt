@@ -74,7 +74,7 @@ type DB struct {
 	// https://github.com/boltdb/bolt/issues/284
 	NoGrowSync bool
 
-	// When `true`, bbolt will always load the free pages when opening the DB.
+	// When `true`, witchbolt will always load the free pages when opening the DB.
 	// When opening db in write mode, this flag will always automatically
 	// set to `true`.
 	PreLoadFreelist bool
@@ -216,9 +216,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 		lg.Infof("Opening db file (%s) with mode %s and with options: %s", path, mode, options)
 		defer func() {
 			if err != nil {
-				lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
+				lg.Errorf("Opening witchbolt db (%s) failed: %v", path, err)
 			} else {
-				lg.Infof("Opening bbolt db (%s) successfully", path)
+				lg.Infof("Opening witchbolt db (%s) successfully", path)
 			}
 		}()
 	}
@@ -1159,12 +1159,12 @@ func safelyCall(fn func(*Tx) error, tx *Tx) (err error) {
 // then it allows you to force the database file to sync against the disk.
 func (db *DB) Sync() (err error) {
 	if lg := db.Logger(); lg != discardLogger {
-		lg.Debugf("Syncing bbolt db (%s)", db.path)
+		lg.Debugf("Syncing witchbolt db (%s)", db.path)
 		defer func() {
 			if err != nil {
-				lg.Errorf("[GOOS: %s, GOARCH: %s] syncing bbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
+				lg.Errorf("[GOOS: %s, GOARCH: %s] syncing witchbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
 			} else {
-				lg.Debugf("Syncing bbolt db (%s) successfully", db.path)
+				lg.Debugf("Syncing witchbolt db (%s) successfully", db.path)
 			}
 		}()
 	}
@@ -1375,7 +1375,7 @@ type Options struct {
 	NoFreelistSync bool
 
 	// PreLoadFreelist sets whether to load the free pages when opening
-	// the db file. Note when opening db in write mode, bbolt will always
+	// the db file. Note when opening db in write mode, witchbolt will always
 	// load the free pages.
 	PreLoadFreelist bool
 
@@ -1406,7 +1406,7 @@ type Options struct {
 	// will be immediately resized to match `InitialMmapSize` (aligned to page size)
 	// when the DB is opened. On non-Windows platforms, the file size will grow
 	// dynamically based on the actual amount of written data, regardless of `InitialMmapSize`.
-	// Refer to https://github.com/etcd-io/bbolt/issues/378#issuecomment-1378121966.
+	// Refer to https://github.com/etcd-io/witchbolt/issues/378#issuecomment-1378121966.
 	InitialMmapSize int
 
 	// PageSize overrides the default OS page size.
@@ -1429,7 +1429,7 @@ type Options struct {
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
 
-	// Logger is the logger used for bbolt.
+	// Logger is the logger used for witchbolt.
 	Logger Logger
 
 	// PageFlushObservers registers observers that receive flushed page events.
@@ -1464,7 +1464,7 @@ type Stats struct {
 	// Put `TxStats` at the first field to ensure it's 64-bit aligned. Note
 	// that the first word in an allocated struct can be relied upon to be
 	// 64-bit aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG.
-	// Also refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
+	// Also refer to discussion in https://github.com/etcd-io/witchbolt/issues/577.
 	TxStats TxStats // global, ongoing stats.
 
 	// Freelist stats

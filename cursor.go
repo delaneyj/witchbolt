@@ -261,7 +261,7 @@ func (c *Cursor) prev() (key []byte, value []byte, flags uint32) {
 		// and stay at the first element, so that users can continue to
 		// iterate over the elements in reverse direction by calling `Next`.
 		// We should return nil in such case.
-		// Refer to https://github.com/etcd-io/bbolt/issues/733
+		// Refer to https://github.com/etcd-io/witchbolt/issues/733
 		if len(c.stack) == 1 {
 			c.first()
 			return nil, nil, 0

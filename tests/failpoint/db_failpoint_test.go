@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	gofail "go.etcd.io/gofail/runtime"
 
 	"github.com/delaneyj/witchbolt"
 	"github.com/delaneyj/witchbolt/errors"
 	"github.com/delaneyj/witchbolt/internal/btesting"
 	"github.com/delaneyj/witchbolt/internal/common"
 	"github.com/delaneyj/witchbolt/internal/guts_cli"
-	gofail "go.etcd.io/gofail/runtime"
 )
 
 func TestFailpoint_MapFail(t *testing.T) {
@@ -161,14 +161,14 @@ func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 
 // TestIssue72 reproduces issue 72.
 //
-// When bbolt is processing a `Put` invocation, the key might be concurrently
+// When witchbolt is processing a `Put` invocation, the key might be concurrently
 // updated by the application which calls the `Put` API (although it shouldn't).
-// It might lead to a situation that bbolt use an old key to find a proper
+// It might lead to a situation that witchbolt use an old key to find a proper
 // position to insert the key/value pair, but actually inserts a new key.
 // Eventually it might break the rule that all keys should be sorted. In a
 // worse case, it might cause page elements to point to already freed pages.
 //
-// REF: https://github.com/etcd-io/bbolt/issues/72
+// REF: https://github.com/etcd-io/witchbolt/issues/72
 func TestIssue72(t *testing.T) {
 	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 
@@ -228,7 +228,7 @@ func TestIssue72(t *testing.T) {
 
 	require.NoError(t, gofail.Disable("beforeBucketPut"))
 
-	// bbolt inserts 100 into last branch page. Since there are two `1`
+	// witchbolt inserts 100 into last branch page. Since there are two `1`
 	// keys in branch, spill operation will update first `1` pointer and
 	// then last one won't be updated and continues to point to freed page.
 	//

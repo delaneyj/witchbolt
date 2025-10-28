@@ -21,7 +21,7 @@ import (
 // TestCursor_RepeatOperations verifies that a cursor can continue to
 // iterate over all elements in reverse direction when it has already
 // reached to the end or beginning.
-// Refer to https://github.com/etcd-io/bbolt/issues/733
+// Refer to https://github.com/etcd-io/witchbolt/issues/733
 func TestCursor_RepeatOperations(t *testing.T) {
 	testCases := []struct {
 		name     string

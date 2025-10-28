@@ -27,11 +27,3 @@ func buildSegmentPayload(seg *Segment) segmentPayload {
 func encodeSegmentCBORPayload(payload *segmentPayload) ([]byte, error) {
 	return cborEncMode.Marshal(payload)
 }
-
-func decodeSegmentCBORPayload(data []byte) (segmentPayload, error) {
-	var payload segmentPayload
-	if err := cborDecMode.Unmarshal(data, &payload); err != nil {
-		return segmentPayload{}, err
-	}
-	return payload, nil
-}

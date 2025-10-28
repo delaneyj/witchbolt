@@ -16,7 +16,7 @@ import (
 	"github.com/delaneyj/witchbolt"
 )
 
-// Controller implements a bbolt.PageFlushObserver and orchestrates replication.
+// Controller implements a witchbolt.PageFlushObserver and orchestrates replication.
 type Controller struct {
 	db     *witchbolt.DB
 	config Config
@@ -124,7 +124,7 @@ func (c *Controller) Stop(ctx context.Context) error {
 	return nil
 }
 
-// OnPageFlush implements bbolt.PageFlushObserver.
+// OnPageFlush implements witchbolt.PageFlushObserver.
 func (c *Controller) OnPageFlush(info witchbolt.PageFlushInfo) error {
 	segment, err := c.buildSegment(info)
 	if err != nil {

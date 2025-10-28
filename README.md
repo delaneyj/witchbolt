@@ -5,13 +5,13 @@
 [![Releases](https://img.shields.io/github/release/delaneyj/witchbolt/all.svg?style=flat-square)](https://github.com/delaneyj/witchbolt/releases)
 [![LICENSE](https://img.shields.io/github/license/delaneyj/witchbolt.svg?style=flat-square)](https://github.com/delaneyj/witchbolt/blob/main/LICENSE)
 
-WitchBolt is a forward-looking fork of [etcd-io/bbolt](https://github.com/etcd-io/bbolt),
+WitchBolt is a forward-looking fork of [etcd-io/witchbolt](https://github.com/etcd-io/witchbolt),
 which itself continues [Ben Johnson's][gh_ben] [Bolt][bolt] key/value store. We
 renamed the module to make room for new capabilities—most notably a built-in
 streaming replication subsystem—without implying strict API compatibility with
 the upstream project. The goals remain the same: reliability, simplicity, and a
 small embedded footprint, while experimenting with features that are outside the
-scope of the original bbolt API contract. The name nods to the Dungeons & Dragons
+scope of the original witchbolt API contract. The name nods to the Dungeons & Dragons
 spell [Witch Bolt](https://dnd5e.wikidot.com/spell:witch-bolt), a sustained lightning effect—appropriate for a KV store that
 now focuses on sustained, streaming replication.
 
@@ -22,7 +22,7 @@ and every Go tool command in this README reflects the new module identity.
 ## About the fork
 
 - `github.com/benbjohnson/bolt` was the original embedded key/value store.
-- `github.com/etcd-io/bbolt` kept that project alive and stable for the wider
+- `github.com/etcd-io/witchbolt` kept that project alive and stable for the wider
   Go community.
 - **WitchBolt** continues the lineage with a willingness to add new
   capabilities (streaming replication, pluggable observers, tighter cloud
@@ -65,7 +65,7 @@ replica, and wired up SFTP & NATS JetStream object storage clients for
 environmental parity. Snapshots, retention, Zstandard
 compression by default (set `codec: none` to disable), and automatic restores are supported
 out of the box. See `stream/README.md` for architecture details and
-the `bbolt stream restore` CLI command for one-shot restores from replica storage.
+the `witchbolt stream restore` CLI command for one-shot restores from replica storage.
 
 To enable stream replication during `witchbolt.Open`, supply a page-flush observer:
 
@@ -152,18 +152,18 @@ $ go get github.com/delaneyj/witchbolt@latest
 
 This will retrieve the library and update your `go.mod` and `go.sum` files.
 
-To run the command line utility (still named `bbolt` for continuity), execute:
+To run the command line utility (still named `witchbolt` for continuity), execute:
 
 ```sh
-$ go run github.com/delaneyj/witchbolt/cmd/bbolt@latest
+$ go run github.com/delaneyj/witchbolt/cmd/witchbolt@latest
 ```
 
-Run `go install` to install the `bbolt` command line utility into
+Run `go install` to install the `witchbolt` command line utility into
 your `$GOBIN` path, which defaults to `$GOPATH/bin` or `$HOME/go/bin` if the
 `GOPATH` environment variable is not set.
 
 ```sh
-$ go install github.com/delaneyj/witchbolt/cmd/bbolt@latest
+$ go install github.com/delaneyj/witchbolt/cmd/witchbolt@latest
 ```
 
 ### Importing WitchBolt
@@ -530,7 +530,7 @@ key and the cursor still points to the first element if present.
 If you remove key/value pairs during iteration, the cursor may automatically
 move to the next position if present in current node each time removing a key.
 When you call `c.Next()` after removing a key, it may skip one key/value pair.
-Refer to [pull/611](https://github.com/etcd-io/bbolt/pull/611) to get more detailed info.
+Refer to [pull/611](https://github.com/etcd-io/witchbolt/pull/611) to get more detailed info.
 
 During iteration, if the key is non-`nil` but the value is `nil`, that means
 the key refers to a bucket rather than a value. Use `Bucket.Bucket()` to
@@ -949,7 +949,7 @@ Here are a few things to note when evaluating and using Bolt:
   cursor may not work properly. Each time when removing a key/value pair, the
   cursor may automatically move to the next position if present. When users
   call `c.Next()` after removing a key, it may skip one key/value pair.
-  Refer to https://github.com/etcd-io/bbolt/pull/611 for more detailed info.
+  Refer to https://github.com/etcd-io/witchbolt/pull/611 for more detailed info.
 
   For more information on page allocation, [see this comment][page-allocation].
 
@@ -1006,7 +1006,7 @@ them via pull request.
 
 ## Known Issues
 
-- bbolt might run into data corruption issue on Linux when the feature
+- witchbolt might run into data corruption issue on Linux when the feature
   [ext4: fast commit](https://lwn.net/Articles/842385/), which was introduced in
   linux kernel version v5.10, is enabled. The fixes to the issue were included in
   linux kernel version v5.17, please refer to links below,
@@ -1015,10 +1015,10 @@ them via pull request.
   - [ext4: fast commit may not fallback for ineligible commit](https://lore.kernel.org/lkml/202201091544.W5HHEXAp-lkp@intel.com/T/#ma0768815e4b5f671e9e451d578256ef9a76fe30e)
   - [ext4 updates for 5.17](https://lore.kernel.org/lkml/YdyxjTFaLWif6BCM@mit.edu/)
 
-  Please also refer to the discussion in https://github.com/etcd-io/bbolt/issues/562.
+  Please also refer to the discussion in https://github.com/etcd-io/witchbolt/issues/562.
 
 - Writing a value with a length of 0 will always result in reading back an empty `[]byte{}` value.
-  Please refer to [issues/726#issuecomment-2061694802](https://github.com/etcd-io/bbolt/issues/726#issuecomment-2061694802).
+  Please refer to [issues/726#issuecomment-2061694802](https://github.com/etcd-io/witchbolt/issues/726#issuecomment-2061694802).
 
 ## Other Projects Using Bolt
 
@@ -1053,20 +1053,20 @@ Below is a list of public, open source projects that use Bolt:
 - [GoWebApp](https://github.com/josephspurrier/gowebapp) - A basic MVC web application in Go using BoltDB.
 - [GoShort](https://github.com/pankajkhairnar/goShort) - GoShort is a URL shortener written in Golang and BoltDB for persistent key/value storage and for routing it's using high performent HTTPRouter.
 - [gopherpit](https://github.com/gopherpit/gopherpit) - A web service to manage Go remote import paths with custom domains
-- [gokv](https://github.com/philippgille/gokv) - Simple key-value store abstraction and implementations for Go (Redis, Consul, etcd, bbolt, BadgerDB, LevelDB, Memcached, DynamoDB, S3, PostgreSQL, MongoDB, CockroachDB and many more)
+- [gokv](https://github.com/philippgille/gokv) - Simple key-value store abstraction and implementations for Go (Redis, Consul, etcd, witchbolt, BadgerDB, LevelDB, Memcached, DynamoDB, S3, PostgreSQL, MongoDB, CockroachDB and many more)
 - [Gitchain](https://github.com/gitchain/gitchain) - Decentralized, peer-to-peer Git repositories aka "Git meets Bitcoin".
 - [InfluxDB](https://influxdata.com) - Scalable datastore for metrics, events, and real-time analytics.
 - [ipLocator](https://github.com/AndreasBriese/ipLocator) - A fast ip-geo-location-server using bolt with bloom filters.
 - [ipxed](https://github.com/kelseyhightower/ipxed) - Web interface and api for ipxed.
 - [Ironsmith](https://github.com/timshannon/ironsmith) - A simple, script-driven continuous integration (build - > test -> release) tool, with no external dependencies
 - [Kala](https://github.com/ajvb/kala) - Kala is a modern job scheduler optimized to run on a single node. It is persistent, JSON over HTTP API, ISO 8601 duration notation, and dependent jobs.
-- [Key Value Access Language (KVAL)](https://github.com/kval-access-language) - A proposed grammar for key-value datastores offering a bbolt binding.
+- [Key Value Access Language (KVAL)](https://github.com/kval-access-language) - A proposed grammar for key-value datastores offering a witchbolt binding.
 - [LedisDB](https://github.com/siddontang/ledisdb) - A high performance NoSQL, using Bolt as optional storage.
 - [lru](https://github.com/crowdriff/lru) - Easy to use Bolt-backed Least-Recently-Used (LRU) read-through cache with chainable remote stores.
 - [mbuckets](https://github.com/abhigupta912/mbuckets) - A Bolt wrapper that allows easy operations on multi level (nested) buckets.
 - [MetricBase](https://github.com/msiebuhr/MetricBase) - Single-binary version of Graphite.
 - [MuLiFS](https://github.com/dankomiocevic/mulifs) - Music Library Filesystem creates a filesystem to organise your music files.
-- [NATS](https://github.com/nats-io/nats-streaming-server) - NATS Streaming uses bbolt for message and metadata storage.
+- [NATS](https://github.com/nats-io/nats-streaming-server) - NATS Streaming uses witchbolt for message and metadata storage.
 - [Portainer](https://github.com/portainer/portainer) - A lightweight service delivery platform for containerized applications that can be used to manage Docker, Swarm, Kubernetes and ACI environments.
 - [Prometheus Annotation Server](https://github.com/oliver006/prom_annotation_server) - Annotation server for PromDash & Prometheus service monitoring system.
 - [Rain](https://github.com/cenkalti/rain) - BitTorrent client and library.
