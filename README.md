@@ -1,5 +1,5 @@
 # WitchBolt
-
+![logo](witch_bolt.webp)
 [![Go Report Card](https://goreportcard.com/badge/github.com/delaneyj/witchbolt?style=flat-square)](https://goreportcard.com/report/github.com/delaneyj/witchbolt)
 [![Go Reference](https://pkg.go.dev/badge/github.com/delaneyj/witchbolt.svg)](https://pkg.go.dev/github.com/delaneyj/witchbolt)
 [![Releases](https://img.shields.io/github/release/delaneyj/witchbolt/all.svg?style=flat-square)](https://github.com/delaneyj/witchbolt/releases)
