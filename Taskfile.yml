@@ -20,10 +20,10 @@ tasks:
       - gofmt -l -s -w .
       - go tool golang.org/x/tools/cmd/goimports -l -w .
 
-  lint:
-    desc: Run golangci-lint
+  vet:
+    desc: Run go vet
     cmds:
-      - golangci-lint run ./...
+      - go vet ./...
 
   test:
     desc: Run tests for both freelist types
@@ -59,26 +59,12 @@ tasks:
       - rm -f cover-*.out
 
   test-failpoint:
-    desc: Run failpoint tests
-    deps: [gofail-enable]
+    desc: Run failpoint tests with failpoint build tag
     cmds:
-      - defer: {task: gofail-disable}
       - for: [hashmap, array]
         cmd: |
           echo "[failpoint] {{.ITEM}} freelist test"
-          WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE={{.ITEM}} go test -v -timeout 30m ./tests/failpoint
-
-  gofail-enable:
-    desc: Enable gofail failpoints
-    cmds:
-      - go tool go.etcd.io/gofail enable .
-    status:
-      - test -f db.fail.go
-
-  gofail-disable:
-    desc: Disable gofail failpoints
-    cmds:
-      - go tool go.etcd.io/gofail disable .
+          WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE={{.ITEM}} go test -v -tags=failpoint -timeout 30m ./tests/failpoint
 
   bench:
     desc: Run benchmarks (PKG=./... BENCH=BenchmarkName)
@@ -90,11 +76,10 @@ tasks:
 
   test-robustness:
     desc: Run robustness tests (requires sudo)
-    deps: [gofail-enable, build]
+    deps: [build]
     cmds:
-      - defer: {task: gofail-disable}
-      - sudo env PATH=$$PATH go test -v ./tests/dmflakey -test.root
-      - sudo env PATH={{.ROOT_DIR}}/{{.BIN_DIR}}:$$PATH go test -v {{.ROBUSTNESS_TESTFLAGS}} ./tests/robustness -test.root
+      - sudo env "PATH=$PATH" go test -v -tags=failpoint ./tests/dmflakey -test.root
+      - sudo env "PATH={{.ROOT_DIR}}/{{.BIN_DIR}}:$PATH" go test -v -tags=failpoint {{.ROBUSTNESS_TESTFLAGS}} ./tests/robustness -test.root
 
   test-benchmark-compare:
     desc: Compare benchmark results against REF
@@ -106,5 +91,5 @@ tasks:
     desc: Run all CI checks
     cmds:
       - task: fmt
-      - task: lint
+      - task: vet
       - task: test

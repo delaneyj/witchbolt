@@ -12,6 +12,7 @@ import (
 
 	berrors "github.com/delaneyj/witchbolt/errors"
 	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
 	fl "github.com/delaneyj/witchbolt/internal/freelist"
 )
 
@@ -528,8 +529,9 @@ func (db *DB) mmap(minsz int) (err error) {
 	}
 
 	// Memory-map the data file as a byte slice.
-	// gofail: var mapError string
-	// return errors.New(mapError)
+	if msg, ok := fp.Inject("mapError"); ok {
+		return errors.New(msg)
+	}
 	if err = mmap(db, size); err != nil {
 		lg.Errorf("[GOOS: %s, GOARCH: %s] mmap failed, size: %d, error: %v", runtime.GOOS, runtime.GOARCH, size, err)
 		return err
@@ -582,8 +584,9 @@ func (db *DB) invalidate() {
 func (db *DB) munmap() error {
 	defer db.invalidate()
 
-	// gofail: var unmapError string
-	// return errors.New(unmapError)
+	if msg, ok := fp.Inject("unmapError"); ok {
+		return errors.New(msg)
+	}
 	if err := munmap(db); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munmap failed, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, db.datasz, err)
 		return fmt.Errorf("unmap error: %w", err)
@@ -630,8 +633,9 @@ func (db *DB) mmapSize(size int) (int, error) {
 }
 
 func (db *DB) munlock(fileSize int) error {
-	// gofail: var munlockError string
-	// return errors.New(munlockError)
+	if msg, ok := fp.Inject("munlockError"); ok {
+		return errors.New(msg)
+	}
 	if err := munlock(db, fileSize); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
 		return fmt.Errorf("munlock error: %w", err)
@@ -640,8 +644,9 @@ func (db *DB) munlock(fileSize int) error {
 }
 
 func (db *DB) mlock(fileSize int) error {
-	// gofail: var mlockError string
-	// return errors.New(mlockError)
+	if msg, ok := fp.Inject("mlockError"); ok {
+		return errors.New(msg)
+	}
 	if err := mlock(db, fileSize); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] mlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
 		return fmt.Errorf("mlock error: %w", err)
@@ -1294,8 +1299,9 @@ func (db *DB) grow(sz int) error {
 	// https://github.com/boltdb/bolt/issues/284
 	if !db.NoGrowSync && !db.readOnly {
 		if runtime.GOOS != "windows" {
-			// gofail: var resizeFileError string
-			// return errors.New(resizeFileError)
+			if msg, ok := fp.Inject("resizeFileError"); ok {
+				return errors.New(msg)
+			}
 			if err := db.file.Truncate(int64(sz)); err != nil {
 				lg.Errorf("[GOOS: %s, GOARCH: %s] truncating file failed, size: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, sz, db.datasz, err)
 				return fmt.Errorf("file resize error: %s", err)

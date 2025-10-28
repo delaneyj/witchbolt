@@ -7,6 +7,7 @@ import (
 
 	"github.com/delaneyj/witchbolt/errors"
 	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
 )
 
 const (
@@ -486,7 +487,7 @@ func (b *Bucket) Put(key []byte, value []byte) (err error) {
 		return errors.ErrIncompatibleValue
 	}
 
-	// gofail: var beforeBucketPut struct{}
+	fp.InjectStruct("beforeBucketPut")
 
 	c.node().put(newKey, newKey, value, 0, 0)
 

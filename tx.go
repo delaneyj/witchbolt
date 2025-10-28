@@ -14,6 +14,7 @@ import (
 
 	berrors "github.com/delaneyj/witchbolt/errors"
 	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
 )
 
 // Tx represents a read-only or read/write transaction on the database.
@@ -228,10 +229,10 @@ func (tx *Tx) Commit() (err error) {
 
 	// If the high water mark has moved up then attempt to grow the database.
 	if tx.meta.Pgid() > opgid {
-		_ = errors.New("")
-		// gofail: var lackOfDiskSpace string
-		// tx.rollback()
-		// return errors.New(lackOfDiskSpace)
+		if msg, ok := fp.Inject("lackOfDiskSpace"); ok {
+			tx.rollback()
+			return errors.New(msg)
+		}
 		if err = tx.db.grow(int(tx.meta.Pgid()+1) * tx.db.pageSize); err != nil {
 			lg.Errorf("growing db size failed, pgid: %d, pagesize: %d, error: %v", tx.meta.Pgid(), tx.db.pageSize, err)
 			tx.rollback()
@@ -569,7 +570,7 @@ func (tx *Tx) write() (err error) {
 
 	// Ignore file sync if flag is set on DB.
 	if !tx.db.NoSync || common.IgnoreNoSync {
-		// gofail: var beforeSyncDataPages struct{}
+		fp.InjectStruct("beforeSyncDataPages")
 		if err = fdatasync(tx.db); err != nil {
 			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %v", runtime.GOOS, runtime.GOARCH, err)
 			return err
@@ -657,8 +658,9 @@ func copyPagePayload(p *common.Page, pageSize int) []byte {
 
 // writeMeta writes the meta to the disk.
 func (tx *Tx) writeMeta() error {
-	// gofail: var beforeWriteMetaError string
-	// return errors.New(beforeWriteMetaError)
+	if msg, ok := fp.Inject("beforeWriteMetaError"); ok {
+		return errors.New(msg)
+	}
 
 	// Create a temporary buffer for the meta page.
 	lg := tx.db.Logger()
@@ -675,7 +677,7 @@ func (tx *Tx) writeMeta() error {
 	}
 	tx.db.metalock.Unlock()
 	if !tx.db.NoSync || common.IgnoreNoSync {
-		// gofail: var beforeSyncMetaPage struct{}
+		fp.InjectStruct("beforeSyncMetaPage")
 		if err := fdatasync(tx.db); err != nil {
 			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
 			return err

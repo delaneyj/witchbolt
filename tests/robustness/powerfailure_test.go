@@ -84,6 +84,11 @@ func TestRestartFromPowerFailureExt4(t *testing.T) {
 }
 
 func TestRestartFromPowerFailureXFS(t *testing.T) {
+	// Skip all XFS tests if mkfs.xfs is not available
+	if _, err := exec.LookPath("mkfs.xfs"); err != nil {
+		t.Skip("mkfs.xfs not found, skipping XFS tests")
+	}
+
 	for _, tc := range []struct {
 		name         string
 		mkfsOpt      string

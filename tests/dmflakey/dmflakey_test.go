@@ -28,6 +28,13 @@ func TestMain(m *testing.M) {
 func TestBasic(t *testing.T) {
 	for _, fsType := range []FSType{FSTypeEXT4, FSTypeXFS} {
 		t.Run(string(fsType), func(t *testing.T) {
+			// Skip XFS if mkfs.xfs is not available
+			if fsType == FSTypeXFS {
+				if _, err := exec.LookPath("mkfs.xfs"); err != nil {
+					t.Skip("mkfs.xfs not found, skipping XFS test")
+				}
+			}
+
 			tmpDir := t.TempDir()
 
 			flakey, err := InitFlakey("go-dmflakey", tmpDir, fsType, "")
