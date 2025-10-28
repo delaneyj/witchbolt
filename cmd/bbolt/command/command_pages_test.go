@@ -9,16 +9,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 // Ensure the "pages" command neither panic, nor change the db file.
 func TestPagesCommand_Run(t *testing.T) {
 	t.Log("Creating sample DB")
 	db := btesting.MustCreateDB(t)
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		for _, name := range []string{"foo", "bar"} {
 			b, err := tx.CreateBucket([]byte(name))
 			if err != nil {

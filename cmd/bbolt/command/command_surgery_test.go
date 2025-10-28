@@ -9,16 +9,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
 func TestSurgery_RevertMetaPage(t *testing.T) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
@@ -63,7 +63,7 @@ func TestSurgery_RevertMetaPage(t *testing.T) {
 
 func TestSurgery_CopyPage(t *testing.T) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	// Insert some sample data
@@ -103,7 +103,7 @@ func TestSurgery_CopyPage(t *testing.T) {
 //  1. The page is a branch page. All its children should become free pages.
 func TestSurgery_ClearPage(t *testing.T) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	// Insert some sample data
@@ -267,7 +267,7 @@ func TestSurgery_ClearPageElements_Without_Overflow(t *testing.T) {
 
 func testSurgeryClearPageElementsWithoutOverflow(t *testing.T, startIdx, endIdx int, isBranchPage, setEndIdxAsCount, removeOnlyOne, expectError bool) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	// Generate sample db
@@ -486,11 +486,11 @@ func TestSurgery_ClearPageElements_With_Overflow(t *testing.T) {
 
 func testSurgeryClearPageElementsWithOverflow(t *testing.T, startIdx, endIdx int, valueSizes []int, expectedOverflow int) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	// Generate sample db
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		b, _ := tx.CreateBucketIfNotExists([]byte("data"))
 		for i, valueSize := range valueSizes {
 			key := []byte(fmt.Sprintf("%04d", i))

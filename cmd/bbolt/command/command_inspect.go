@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/delaneyj/witchbolt"
 	"github.com/spf13/cobra"
-
-	bolt "go.etcd.io/bbolt"
 )
 
 func newInspectCommand() *cobra.Command {
@@ -28,13 +27,13 @@ func inspectFunc(srcDBPath string) error {
 		return err
 	}
 
-	db, err := bolt.Open(srcDBPath, 0600, &bolt.Options{ReadOnly: true})
+	db, err := witchbolt.Open(srcDBPath, 0600, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	return db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		bs := tx.Inspect()
 		out, err := json.MarshalIndent(bs, "", "    ")
 		if err != nil {

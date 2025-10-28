@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 type compactOptions struct {
@@ -63,21 +63,21 @@ func (o *compactOptions) Run(cmd *cobra.Command, srcPath string) (err error) {
 	initialSize := fi.Size()
 
 	// open source database.
-	src, err := bolt.Open(srcPath, 0400, &bolt.Options{ReadOnly: true})
+	src, err := witchbolt.Open(srcPath, 0400, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
 	defer src.Close()
 
 	// open destination database.
-	dst, err := bolt.Open(o.dstPath, fi.Mode(), &bolt.Options{NoSync: o.dstNoSync})
+	dst, err := witchbolt.Open(o.dstPath, fi.Mode(), &witchbolt.Options{NoSync: o.dstNoSync})
 	if err != nil {
 		return err
 	}
 	defer dst.Close()
 
 	// run compaction.
-	if err := bolt.Compact(dst, src, o.txMaxSize); err != nil {
+	if err := witchbolt.Compact(dst, src, o.txMaxSize); err != nil {
 		return err
 	}
 

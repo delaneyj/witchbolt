@@ -1,10 +1,10 @@
-package bbolt
+package witchbolt
 
 import (
 	"testing"
 	"unsafe"
 
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // Ensure that a node can insert a key/value.

@@ -10,10 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
 func TestPageItemCommand_Run(t *testing.T) {
@@ -42,11 +42,11 @@ func TestPageItemCommand_Run(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+			db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 			srcPath := db.Path()
 
 			t.Log("Inserting some sample data")
-			err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *witchbolt.Tx) error {
 				b, bErr := tx.CreateBucketIfNotExists([]byte("data"))
 				if bErr != nil {
 					return bErr

@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 type keysOptions struct {
@@ -36,7 +36,7 @@ func keysFunc(cmd *cobra.Command, cfg keysOptions, dbPath string, buckets ...str
 		return err
 	}
 	// Open database.
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{
+	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
 		ReadOnly: true,
 	})
 	if err != nil {
@@ -45,7 +45,7 @@ func keysFunc(cmd *cobra.Command, cfg keysOptions, dbPath string, buckets ...str
 	defer db.Close()
 
 	// Print keys.
-	return db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		// Find bucket.
 		lastBucket, err := findLastBucket(tx, buckets)
 		if err != nil {

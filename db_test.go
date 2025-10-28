@@ -1,4 +1,4 @@
-package bbolt_test
+package witchbolt_test
 
 import (
 	"bytes"
@@ -21,10 +21,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	berrors "go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt"
+	berrors "github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // pageSize is the size of one page in the data file.
@@ -51,7 +51,7 @@ func TestOpen(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := witchbolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	} else if db == nil {
@@ -87,7 +87,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				db, err := bolt.Open(path, 0600, nil)
+				db, err := witchbolt.Open(path, 0600, nil)
 				if err != nil {
 					errCh <- err
 					return
@@ -110,7 +110,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 
 // Ensure that opening a database with a blank path returns an error.
 func TestOpen_ErrPathRequired(t *testing.T) {
-	_, err := bolt.Open("", 0600, nil)
+	_, err := witchbolt.Open("", 0600, nil)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -118,7 +118,7 @@ func TestOpen_ErrPathRequired(t *testing.T) {
 
 // Ensure that opening a database with a bad path returns an error.
 func TestOpen_ErrNotExists(t *testing.T) {
-	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0600, nil)
+	_, err := witchbolt.Open(filepath.Join(tempfile(), "bad-path"), 0600, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -140,7 +140,7 @@ func TestOpen_ErrInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrInvalid {
+	if _, err := witchbolt.Open(path, 0600, nil); err != berrors.ErrInvalid {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -176,7 +176,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrVersionMismatch {
+	if _, err := witchbolt.Open(path, 0600, nil); err != berrors.ErrVersionMismatch {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -212,7 +212,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrChecksum {
+	if _, err := witchbolt.Open(path, 0600, nil); err != berrors.ErrChecksum {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -252,7 +252,7 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 		givenPageSize := 1024 << uint(i)
 		t.Logf("Testing page size %d", givenPageSize)
 		// Create empty database.
-		db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: givenPageSize})
+		db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: givenPageSize})
 		path := db.Path()
 		// Close the database
 		db.MustClose()
@@ -303,7 +303,7 @@ func TestOpen_Size(t *testing.T) {
 	}
 
 	db.MustReopen()
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if err := tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0}); err != nil {
 			t.Fatal(err)
 		}
@@ -342,7 +342,7 @@ func TestOpen_Size_Large(t *testing.T) {
 	// Insert until we get above the minimum 4MB size.
 	var index uint64
 	for i := 0; i < 10000; i++ {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		if err := db.Update(func(tx *witchbolt.Tx) error {
 			b, _ := tx.CreateBucketIfNotExists([]byte("data"))
 			for j := 0; j < 1000; j++ {
 				if err := b.Put(u64tob(index), make([]byte, 50)); err != nil {
@@ -368,11 +368,11 @@ func TestOpen_Size_Large(t *testing.T) {
 	}
 
 	// Reopen database, update, and check size again.
-	db0, err := bolt.Open(path, 0600, nil)
+	db0, err := witchbolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db0.Update(func(tx *bolt.Tx) error {
+	if err := db0.Update(func(tx *witchbolt.Tx) error {
 		return tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0})
 	}); err != nil {
 		t.Fatal(err)
@@ -398,22 +398,22 @@ func TestOpen_Check(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := witchbolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
+	if err = db.View(func(tx *witchbolt.Tx) error { return <-tx.Check() }); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	db, err = bolt.Open(path, 0600, nil)
+	db, err = witchbolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
+	if err := db.View(func(tx *witchbolt.Tx) error { return <-tx.Check() }); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -431,7 +431,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := witchbolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +445,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = bolt.Open(path, 0600, nil)
+	_, err = witchbolt.Open(path, 0600, nil)
 	if err == nil || !strings.Contains(err.Error(), "file size too small") {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -462,7 +462,7 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	initMmapSize := 1 << 30  // 1GB
 	testWriteSize := 1 << 27 // 134MB
 
-	db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
+	db, err := witchbolt.Open(path, 0600, &witchbolt.Options{InitialMmapSize: initMmapSize})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +517,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	// Create a writable db, write k-v and close it.
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -534,8 +534,8 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	}
 
 	f := db.Path()
-	o := &bolt.Options{ReadOnly: true}
-	readOnlyDB, err := bolt.Open(f, 0600, o)
+	o := &witchbolt.Options{ReadOnly: true}
+	readOnlyDB, err := witchbolt.Open(f, 0600, o)
 	if err != nil {
 		panic(err)
 	}
@@ -545,7 +545,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	}
 
 	// Read from a read-only transaction.
-	if err := readOnlyDB.View(func(tx *bolt.Tx) error {
+	if err := readOnlyDB.View(func(tx *witchbolt.Tx) error {
 		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
 		if !bytes.Equal(value, []byte("bar")) {
 			t.Fatal("expect value 'bar', got", value)
@@ -567,7 +567,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 
 func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "db")
-	_, err := bolt.Open(f, 0600, &bolt.Options{ReadOnly: true})
+	_, err := witchbolt.Open(f, 0600, &witchbolt.Options{ReadOnly: true})
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -576,9 +576,9 @@ func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
 func TestOpen_BigPage(t *testing.T) {
 	pageSize := os.Getpagesize()
 
-	db1 := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize * 2})
+	db1 := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize * 2})
 
-	db2 := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize * 4})
+	db2 := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize * 4})
 
 	if db1sz, db2sz := fileSize(db1.Path()), fileSize(db2.Path()); db1sz >= db2sz {
 		t.Errorf("expected %d < %d", db1sz, db2sz)
@@ -589,7 +589,7 @@ func TestOpen_BigPage(t *testing.T) {
 // write-out after no free list sync will recover the free list
 // and write it out.
 func TestOpen_RecoverFreeList(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{NoFreelistSync: true})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{NoFreelistSync: true})
 
 	// Write some pages.
 	tx, err := db.Begin(true)
@@ -639,7 +639,7 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 	db.MustClose()
 
 	// Check free page count is reconstructed when opened with freelist sync.
-	db.SetOptions(&bolt.Options{})
+	db.SetOptions(&witchbolt.Options{})
 	db.MustReopen()
 	// One less free page for syncing the free list on open.
 	freepages--
@@ -650,7 +650,7 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 
 // Ensure that a database cannot open a transaction when it's not open.
 func TestDB_Begin_ErrDatabaseNotOpen(t *testing.T) {
-	var db bolt.DB
+	var db witchbolt.DB
 	if _, err := db.Begin(false); err != berrors.ErrDatabaseNotOpen {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -674,7 +674,7 @@ func TestDB_BeginRW(t *testing.T) {
 // readonly transactions, which are created based on the same data view, should
 // always read the same data.
 func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
-	o := &bolt.Options{
+	o := &witchbolt.Options{
 		NoFreelistSync: false,
 		PageSize:       4096,
 	}
@@ -688,7 +688,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(wtxs * rtxs)
-	f := func(round int, tx *bolt.Tx) {
+	f := func(round int, tx *witchbolt.Tx) {
 		defer wg.Done()
 		time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
 		f := filepath.Join(t.TempDir(), fmt.Sprintf("%d-bolt-", round))
@@ -720,7 +720,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 		snap.MustCheck()
 	}
 
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket(bucketName)
 		return err
 	})
@@ -780,9 +780,9 @@ func TestDB_WriteTo_and_Overwrite(t *testing.T) {
 		},*/
 	}
 
-	fRead := func(db *bolt.DB, bucketName []byte) map[string]string {
+	fRead := func(db *witchbolt.DB, bucketName []byte) map[string]string {
 		data := make(map[string]string)
-		_ = db.View(func(tx *bolt.Tx) error {
+		_ = db.View(func(tx *witchbolt.Tx) error {
 			b := tx.Bucket(bucketName)
 			berr := b.ForEach(func(k, v []byte) error {
 				data[string(k)] = string(v)
@@ -796,7 +796,7 @@ func TestDB_WriteTo_and_Overwrite(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db := btesting.MustCreateDBWithOption(t, &bolt.Options{
+			db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{
 				PageSize: 4096,
 			})
 			filePathOfDb := db.Path()
@@ -808,7 +808,7 @@ func TestDB_WriteTo_and_Overwrite(t *testing.T) {
 			)
 
 			t.Log("Populate some data")
-			err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *witchbolt.Tx) error {
 				b, berr := tx.CreateBucket(bucketName)
 				if berr != nil {
 					return berr
@@ -834,7 +834,7 @@ func TestDB_WriteTo_and_Overwrite(t *testing.T) {
 			// when the target file already exist and is opened.
 			if runtime.GOOS == "linux" {
 				t.Log("Create another empty db file")
-				db2 := btesting.MustCreateDBWithOption(t, &bolt.Options{
+				db2 := btesting.MustCreateDBWithOption(t, &witchbolt.Options{
 					PageSize: 4096,
 				})
 				db2.MustClose()
@@ -854,7 +854,7 @@ func TestDB_WriteTo_and_Overwrite(t *testing.T) {
 			require.NoError(t, rtx.Rollback())
 
 			t.Logf("Read all the data from the backup db after calling WriteTo")
-			newDB, err := bolt.Open(f, 0600, &bolt.Options{
+			newDB, err := witchbolt.Open(f, 0600, &witchbolt.Options{
 				ReadOnly: true,
 			})
 			require.NoError(t, err)
@@ -871,7 +871,7 @@ func TestDB_WriteTo_and_Overwrite(t *testing.T) {
 
 // Ensure that opening a transaction while the DB is closed returns an error.
 func TestDB_BeginRW_Closed(t *testing.T) {
-	var db bolt.DB
+	var db witchbolt.DB
 	if _, err := db.Begin(true); err != berrors.ErrDatabaseNotOpen {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -936,7 +936,7 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 // Ensure a database can provide a transactional block.
 func TestDB_Update(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -954,7 +954,7 @@ func TestDB_Update(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		if v := b.Get([]byte("foo")); v != nil {
 			t.Fatalf("expected nil value, got: %v", v)
@@ -970,8 +970,8 @@ func TestDB_Update(t *testing.T) {
 
 // Ensure a closed database returns an error while running a transaction block
 func TestDB_Update_Closed(t *testing.T) {
-	var db bolt.DB
-	if err := db.Update(func(tx *bolt.Tx) error {
+	var db witchbolt.DB
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
 			t.Fatal(err)
 		}
@@ -986,7 +986,7 @@ func TestDB_Update_ManualCommit(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -1011,7 +1011,7 @@ func TestDB_Update_ManualRollback(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -1036,7 +1036,7 @@ func TestDB_View_ManualCommit(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -1061,7 +1061,7 @@ func TestDB_View_ManualRollback(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -1093,7 +1093,7 @@ func TestDB_Update_Panic(t *testing.T) {
 			}
 		}()
 
-		if err := db.Update(func(tx *bolt.Tx) error {
+		if err := db.Update(func(tx *witchbolt.Tx) error {
 			if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
 				t.Fatal(err)
 			}
@@ -1104,7 +1104,7 @@ func TestDB_Update_Panic(t *testing.T) {
 	}()
 
 	// Verify we can update again.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
 			t.Fatal(err)
 		}
@@ -1114,7 +1114,7 @@ func TestDB_Update_Panic(t *testing.T) {
 	}
 
 	// Verify that our change persisted.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if tx.Bucket([]byte("widgets")) == nil {
 			t.Fatal("expected bucket")
 		}
@@ -1128,7 +1128,7 @@ func TestDB_Update_Panic(t *testing.T) {
 func TestDB_View_Error(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		return errors.New("xxx")
 	}); err == nil || err.Error() != "xxx" {
 		t.Fatalf("unexpected error: %s", err)
@@ -1139,7 +1139,7 @@ func TestDB_View_Error(t *testing.T) {
 func TestDB_View_Panic(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
 			t.Fatal(err)
 		}
@@ -1156,7 +1156,7 @@ func TestDB_View_Panic(t *testing.T) {
 			}
 		}()
 
-		if err := db.View(func(tx *bolt.Tx) error {
+		if err := db.View(func(tx *witchbolt.Tx) error {
 			if tx.Bucket([]byte("widgets")) == nil {
 				t.Fatal("expected bucket")
 			}
@@ -1167,7 +1167,7 @@ func TestDB_View_Panic(t *testing.T) {
 	}()
 
 	// Verify that we can still use read transactions.
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		if tx.Bucket([]byte("widgets")) == nil {
 			t.Fatal("expected bucket")
 		}
@@ -1180,7 +1180,7 @@ func TestDB_View_Panic(t *testing.T) {
 // Ensure that DB stats can be returned.
 func TestDB_Stats(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
@@ -1200,7 +1200,7 @@ func TestDB_Stats(t *testing.T) {
 // Ensure that database pages are in expected order and type.
 func TestDB_Consistency(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
@@ -1208,7 +1208,7 @@ func TestDB_Consistency(t *testing.T) {
 	}
 
 	for i := 0; i < 10; i++ {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		if err := db.Update(func(tx *witchbolt.Tx) error {
 			if err := tx.Bucket([]byte("widgets")).Put([]byte("foo"), []byte("bar")); err != nil {
 				t.Fatal(err)
 			}
@@ -1218,7 +1218,7 @@ func TestDB_Consistency(t *testing.T) {
 		}
 	}
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if p, _ := tx.Page(0); p == nil {
 			t.Fatal("expected page")
 		} else if p.Type != "meta" {
@@ -1266,7 +1266,7 @@ func TestDB_Consistency(t *testing.T) {
 
 // Ensure that DB stats can be subtracted from one another.
 func TestDBStats_Sub(t *testing.T) {
-	var a, b bolt.Stats
+	var a, b witchbolt.Stats
 	a.TxStats.PageCount = 3
 	a.FreePageN = 4
 	b.TxStats.PageCount = 10
@@ -1286,7 +1286,7 @@ func TestDBStats_Sub(t *testing.T) {
 func TestDB_Batch(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
 			t.Fatal(err)
 		}
@@ -1300,7 +1300,7 @@ func TestDB_Batch(t *testing.T) {
 	ch := make(chan error, n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
-			ch <- db.Batch(func(tx *bolt.Tx) error {
+			ch <- db.Batch(func(tx *witchbolt.Tx) error {
 				return tx.Bucket([]byte("widgets")).Put(u64tob(uint64(i)), []byte{})
 			})
 		}(i)
@@ -1314,7 +1314,7 @@ func TestDB_Batch(t *testing.T) {
 	}
 
 	// Ensure data is correct.
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 0; i < n; i++ {
 			if v := b.Get(u64tob(uint64(i))); v == nil {
@@ -1342,7 +1342,7 @@ func TestDB_Batch_Panic(t *testing.T) {
 				problem = p
 			}
 		}()
-		err = db.Batch(func(tx *bolt.Tx) error {
+		err = db.Batch(func(tx *witchbolt.Tx) error {
 			panic(bork)
 		})
 	}()
@@ -1359,7 +1359,7 @@ func TestDB_Batch_Panic(t *testing.T) {
 
 func TestDB_BatchFull(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
@@ -1370,7 +1370,7 @@ func TestDB_BatchFull(t *testing.T) {
 	// buffered so we never leak goroutines
 	ch := make(chan error, size)
 	put := func(i int) {
-		ch <- db.Batch(func(tx *bolt.Tx) error {
+		ch <- db.Batch(func(tx *witchbolt.Tx) error {
 			return tx.Bucket([]byte("widgets")).Put(u64tob(uint64(i)), []byte{})
 		})
 	}
@@ -1402,7 +1402,7 @@ func TestDB_BatchFull(t *testing.T) {
 	}
 
 	// Ensure data is correct.
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 1; i <= size; i++ {
 			if v := b.Get(u64tob(uint64(i))); v == nil {
@@ -1417,7 +1417,7 @@ func TestDB_BatchFull(t *testing.T) {
 
 func TestDB_BatchTime(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
@@ -1428,7 +1428,7 @@ func TestDB_BatchTime(t *testing.T) {
 	// buffered so we never leak goroutines
 	ch := make(chan error, size)
 	put := func(i int) {
-		ch <- db.Batch(func(tx *bolt.Tx) error {
+		ch <- db.Batch(func(tx *witchbolt.Tx) error {
 			return tx.Bucket([]byte("widgets")).Put(u64tob(uint64(i)), []byte{})
 		})
 	}
@@ -1448,7 +1448,7 @@ func TestDB_BatchTime(t *testing.T) {
 	}
 
 	// Ensure data is correct.
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 1; i <= size; i++ {
 			if v := b.Get(u64tob(uint64(i))); v == nil {
@@ -1469,7 +1469,7 @@ func TestDBUnmap(t *testing.T) {
 	require.NoError(t, db.DB.Close())
 
 	// Ignore the following error:
-	// Error: copylocks: call of reflect.ValueOf copies lock value: go.etcd.io/bbolt.DB contains sync.Once contains sync.Mutex (govet)
+	// Error: copylocks: call of reflect.ValueOf copies lock value: github.com/delaneyj/witchbolt.DB contains sync.Once contains sync.Mutex (govet)
 	//nolint:govet
 	v := reflect.ValueOf(*db.DB)
 	dataref := v.FieldByName("dataref")
@@ -1492,7 +1492,7 @@ func fillDBWithKeys(db *btesting.DB, numKeys int) error {
 }
 
 // Creates a new database size, forces a specific allocation size jump, and fills it with the number of keys specified
-func createFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *btesting.DB {
+func createFilledDB(t testing.TB, o *witchbolt.Options, allocSize int, numKeys int) *btesting.DB {
 	// Open a data file.
 	db := btesting.MustCreateDBWithOption(t, o)
 	db.AllocSize = allocSize
@@ -1513,18 +1513,18 @@ func createFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *
 func TestDB_MaxSizeNotExceeded(t *testing.T) {
 	testCases := []struct {
 		name    string
-		options bolt.Options
+		options witchbolt.Options
 	}{
 		{
 			name: "Standard case",
-			options: bolt.Options{
+			options: witchbolt.Options{
 				MaxSize:  5 * 1024 * 1024, // 5 MiB
 				PageSize: 4096,
 			},
 		},
 		{
 			name: "NoGrowSync",
-			options: bolt.Options{
+			options: witchbolt.Options{
 				MaxSize:    5 * 1024 * 1024, // 5 MiB
 				PageSize:   4096,
 				NoGrowSync: true,
@@ -1580,7 +1580,7 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 
 	// Now try to re-open the database with an extremely small max size
 	t.Logf("Reopening bbolt DB at: %s", path)
-	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+	db, err = btesting.OpenDBWithOption(t, path, &witchbolt.Options{
 		MaxSize: 1,
 	})
 	assert.NoError(t, err, "Should be able to open database bigger than MaxSize")
@@ -1614,7 +1614,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 
 	// Now try to re-open the database with an extremely small max size
 	t.Logf("Reopening bbolt DB at: %s", path)
-	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+	db, err = btesting.OpenDBWithOption(t, path, &witchbolt.Options{
 		MaxSize:         1,
 		InitialMmapSize: int(minimumSizeForTest) * 2,
 	})
@@ -1649,7 +1649,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	// Now try to re-open the database with an extremely small max size and
 	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
 	t.Logf("Reopening bbolt DB at: %s", path)
-	_, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+	_, err = btesting.OpenDBWithOption(t, path, &witchbolt.Options{
 		MaxSize:         1,
 		InitialMmapSize: int(newSz) * 2,
 	})
@@ -1658,7 +1658,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 
 func TestDB_HugeValue(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "db")
-	db, err := bolt.Open(dbPath, 0600, nil)
+	db, err := witchbolt.Open(dbPath, 0600, nil)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, db.Close())
@@ -1673,7 +1673,7 @@ func TestDB_HugeValue(t *testing.T) {
 	}
 	data := make([]byte, maxSize)
 
-	_ = db.Update(func(tx *bolt.Tx) error {
+	_ = db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("data"))
 		require.NoError(t, err)
 
@@ -1686,14 +1686,14 @@ func TestDB_HugeValue(t *testing.T) {
 
 func ExampleDB_Update() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := witchbolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.Remove(db.Path())
 
 	// Execute several commands within a read-write transaction.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			return err
@@ -1707,7 +1707,7 @@ func ExampleDB_Update() {
 	}
 
 	// Read the value back from a separate read-only transaction.
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
 		fmt.Printf("The value of 'foo' is: %s\n", value)
 		return nil
@@ -1726,14 +1726,14 @@ func ExampleDB_Update() {
 
 func ExampleDB_View() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := witchbolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.Remove(db.Path())
 
 	// Insert data into a bucket.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("people"))
 		if err != nil {
 			return err
@@ -1750,7 +1750,7 @@ func ExampleDB_View() {
 	}
 
 	// Access data from within a read-only transactional block.
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		v := tx.Bucket([]byte("people")).Get([]byte("john"))
 		fmt.Printf("John's last name is %s.\n", v)
 		return nil
@@ -1769,14 +1769,14 @@ func ExampleDB_View() {
 
 func ExampleDB_Begin() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := witchbolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.Remove(db.Path())
 
 	// Create a bucket using a read-write transaction.
-	if err = db.Update(func(tx *bolt.Tx) error {
+	if err = db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
@@ -1829,7 +1829,7 @@ func ExampleDB_Begin() {
 func BenchmarkDBBatchAutomatic(b *testing.B) {
 	db := btesting.MustCreateDB(b)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("bench"))
 		return err
 	}); err != nil {
@@ -1853,7 +1853,7 @@ func BenchmarkDBBatchAutomatic(b *testing.B) {
 				binary.LittleEndian.PutUint32(buf, id)
 				_, _ = h.Write(buf[:])
 				k := h.Sum(nil)
-				insert := func(tx *bolt.Tx) error {
+				insert := func(tx *witchbolt.Tx) error {
 					b := tx.Bucket([]byte("bench"))
 					return b.Put(k, []byte("filler"))
 				}
@@ -1873,7 +1873,7 @@ func BenchmarkDBBatchAutomatic(b *testing.B) {
 
 func BenchmarkDBBatchSingle(b *testing.B) {
 	db := btesting.MustCreateDB(b)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("bench"))
 		return err
 	}); err != nil {
@@ -1896,7 +1896,7 @@ func BenchmarkDBBatchSingle(b *testing.B) {
 				binary.LittleEndian.PutUint32(buf, id)
 				_, _ = h.Write(buf[:])
 				k := h.Sum(nil)
-				insert := func(tx *bolt.Tx) error {
+				insert := func(tx *witchbolt.Tx) error {
 					b := tx.Bucket([]byte("bench"))
 					return b.Put(k, []byte("filler"))
 				}
@@ -1916,7 +1916,7 @@ func BenchmarkDBBatchSingle(b *testing.B) {
 
 func BenchmarkDBBatchManual10x100(b *testing.B) {
 	db := btesting.MustCreateDB(b)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("bench"))
 		return err
 	}); err != nil {
@@ -1935,7 +1935,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 				defer wg.Done()
 				<-start
 
-				insert100 := func(tx *bolt.Tx) error {
+				insert100 := func(tx *witchbolt.Tx) error {
 					h := fnv.New32a()
 					buf := make([]byte, 4)
 					for minor := uint32(0); minor < 100; minor++ {
@@ -1970,7 +1970,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 
 func validateBatchBench(b *testing.B, db *btesting.DB) {
 	var rollback = errors.New("sentinel error to cause rollback")
-	validate := func(tx *bolt.Tx) error {
+	validate := func(tx *witchbolt.Tx) error {
 		bucket := tx.Bucket([]byte("bench"))
 		h := fnv.New32a()
 		buf := make([]byte, 4)

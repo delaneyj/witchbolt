@@ -1,4 +1,4 @@
-package bbolt_test
+package witchbolt_test
 
 import (
 	"bytes"
@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 // TestCursor_RepeatOperations verifies that a cursor can continue to
@@ -25,7 +25,7 @@ import (
 func TestCursor_RepeatOperations(t *testing.T) {
 	testCases := []struct {
 		name     string
-		testFunc func(t2 *testing.T, bucket *bolt.Bucket)
+		testFunc func(t2 *testing.T, bucket *witchbolt.Bucket)
 	}{
 		{
 			name:     "Repeat NextPrevNext",
@@ -39,17 +39,17 @@ func TestCursor_RepeatOperations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+			db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 
 			bucketName := []byte("data")
 
-			_ = db.Update(func(tx *bolt.Tx) error {
+			_ = db.Update(func(tx *witchbolt.Tx) error {
 				b, _ := tx.CreateBucketIfNotExists(bucketName)
 				testCursorRepeatOperations_PrepareData(t, b)
 				return nil
 			})
 
-			_ = db.View(func(tx *bolt.Tx) error {
+			_ = db.View(func(tx *witchbolt.Tx) error {
 				b := tx.Bucket(bucketName)
 				tc.testFunc(t, b)
 				return nil
@@ -58,7 +58,7 @@ func TestCursor_RepeatOperations(t *testing.T) {
 	}
 }
 
-func testCursorRepeatOperations_PrepareData(t *testing.T, b *bolt.Bucket) {
+func testCursorRepeatOperations_PrepareData(t *testing.T, b *witchbolt.Bucket) {
 	// ensure we have at least one branch page.
 	for i := 0; i < 1000; i++ {
 		k := []byte(fmt.Sprintf("%05d", i))
@@ -67,7 +67,7 @@ func testCursorRepeatOperations_PrepareData(t *testing.T, b *bolt.Bucket) {
 	}
 }
 
-func testRepeatCursorOperations_NextPrevNext(t *testing.T, b *bolt.Bucket) {
+func testRepeatCursorOperations_NextPrevNext(t *testing.T, b *witchbolt.Bucket) {
 	c := b.Cursor()
 	c.First()
 	startKey := []byte(fmt.Sprintf("%05d", 2))
@@ -108,7 +108,7 @@ func testRepeatCursorOperations_NextPrevNext(t *testing.T, b *bolt.Bucket) {
 	}
 }
 
-func testRepeatCursorOperations_PrevNextPrev(t *testing.T, b *bolt.Bucket) {
+func testRepeatCursorOperations_PrevNextPrev(t *testing.T, b *witchbolt.Bucket) {
 	c := b.Cursor()
 
 	startKey := []byte(fmt.Sprintf("%05d", 998))
@@ -152,7 +152,7 @@ func testRepeatCursorOperations_PrevNextPrev(t *testing.T, b *bolt.Bucket) {
 // Ensure that a cursor can return a reference to the bucket that created it.
 func TestCursor_Bucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -169,7 +169,7 @@ func TestCursor_Bucket(t *testing.T) {
 // Ensure that a Tx cursor can seek to the appropriate keys.
 func TestCursor_Seek(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -192,7 +192,7 @@ func TestCursor_Seek(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		c := tx.Bucket([]byte("widgets")).Cursor()
 
 		// Exact match should go to the key.
@@ -242,7 +242,7 @@ func TestCursor_Delete(t *testing.T) {
 	const count = 1000
 
 	// Insert every other key between 0 and $count.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -262,7 +262,7 @@ func TestCursor_Delete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		c := tx.Bucket([]byte("widgets")).Cursor()
 		bound := make([]byte, 8)
 		binary.BigEndian.PutUint64(bound, uint64(count/2))
@@ -282,7 +282,7 @@ func TestCursor_Delete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		stats := tx.Bucket([]byte("widgets")).Stats()
 		if stats.KeyN != count/2+1 {
 			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
@@ -304,7 +304,7 @@ func TestCursor_Seek_Large(t *testing.T) {
 	var count = 10000
 
 	// Insert every other key between 0 and $count.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -324,7 +324,7 @@ func TestCursor_Seek_Large(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		c := tx.Bucket([]byte("widgets")).Cursor()
 		for i := 0; i < count; i++ {
 			seek := make([]byte, 8)
@@ -363,14 +363,14 @@ func TestCursor_Seek_Large(t *testing.T) {
 // Ensure that a cursor can iterate over an empty bucket without error.
 func TestCursor_EmptyBucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		c := tx.Bucket([]byte("widgets")).Cursor()
 		k, v := c.First()
 		if k != nil {
@@ -388,13 +388,13 @@ func TestCursor_EmptyBucket(t *testing.T) {
 func TestCursor_EmptyBucketReverse(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		c := tx.Bucket([]byte("widgets")).Cursor()
 		k, v := c.Last()
 		if k != nil {
@@ -412,7 +412,7 @@ func TestCursor_EmptyBucketReverse(t *testing.T) {
 func TestCursor_Iterate_Leaf(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -482,7 +482,7 @@ func TestCursor_Iterate_Leaf(t *testing.T) {
 func TestCursor_LeafRootReverse(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -545,7 +545,7 @@ func TestCursor_LeafRootReverse(t *testing.T) {
 func TestCursor_Restart(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -591,7 +591,7 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	// Create 1000 keys in the "widgets" bucket.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -609,7 +609,7 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 	}
 
 	// Delete half the keys and then try to iterate.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 0; i < 600; i++ {
 			if err := b.Delete(u64tob(uint64(i))); err != nil {
@@ -637,7 +637,7 @@ func TestCursor_Last_EmptyPages(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	// Create 1000 keys in the "widgets" bucket.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -655,7 +655,7 @@ func TestCursor_Last_EmptyPages(t *testing.T) {
 	}
 
 	// Delete last 800 elements to ensure last page is empty
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 200; i < 1000; i++ {
 			if err := b.Delete(u64tob(uint64(i))); err != nil {
@@ -797,7 +797,7 @@ func TestCursor_QuickCheck_Reverse(t *testing.T) {
 func TestCursor_QuickCheck_BucketsOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -816,7 +816,7 @@ func TestCursor_QuickCheck_BucketsOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		var names []string
 		c := tx.Bucket([]byte("widgets")).Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -838,7 +838,7 @@ func TestCursor_QuickCheck_BucketsOnly(t *testing.T) {
 func TestCursor_QuickCheck_BucketsOnly_Reverse(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
 			t.Fatal(err)
@@ -857,7 +857,7 @@ func TestCursor_QuickCheck_BucketsOnly_Reverse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	if err := db.View(func(tx *witchbolt.Tx) error {
 		var names []string
 		c := tx.Bucket([]byte("widgets")).Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
@@ -877,14 +877,14 @@ func TestCursor_QuickCheck_BucketsOnly_Reverse(t *testing.T) {
 
 func ExampleCursor() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := witchbolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.Remove(db.Path())
 
 	// Start a read-write transaction.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		// Create a new bucket.
 		b, err := tx.CreateBucket([]byte("animals"))
 		if err != nil {
@@ -931,14 +931,14 @@ func ExampleCursor() {
 
 func ExampleCursor_reverse() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := witchbolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.Remove(db.Path())
 
 	// Start a read-write transaction.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		// Create a new bucket.
 		b, err := tx.CreateBucket([]byte("animals"))
 		if err != nil {

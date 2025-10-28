@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/errors"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/errors"
 )
 
 type getOptions struct {
@@ -61,14 +61,14 @@ func getFunc(cmd *cobra.Command, path string, buckets []string, key []byte, opts
 	}
 
 	// open the database
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := witchbolt.Open(path, 0600, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
 	// access the database and get the value
-	return db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		lastBucket, err := findLastBucket(tx, buckets)
 		if err != nil {
 			return err

@@ -1,10 +1,10 @@
-package bbolt
+package witchbolt
 
 import (
 	"encoding/hex"
 	"fmt"
 
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // Check performs several consistency checks on the database for this transaction.

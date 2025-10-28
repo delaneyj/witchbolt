@@ -1,12 +1,12 @@
-package bbolt
+package witchbolt
 
 import (
 	"bytes"
 	"fmt"
 	"unsafe"
 
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 const (

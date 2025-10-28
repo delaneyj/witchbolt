@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 func newStatsCommand() *cobra.Command {
@@ -66,7 +66,7 @@ func statsFunc(cmd *cobra.Command, dbPath string, prefix string) error {
 	}
 
 	// open database.
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{
+	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -75,10 +75,10 @@ func statsFunc(cmd *cobra.Command, dbPath string, prefix string) error {
 	}
 	defer db.Close()
 
-	return db.View(func(tx *bolt.Tx) error {
-		var s bolt.BucketStats
+	return db.View(func(tx *witchbolt.Tx) error {
+		var s witchbolt.BucketStats
 		var count int
-		if err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+		if err := tx.ForEach(func(name []byte, b *witchbolt.Bucket) error {
 			if bytes.HasPrefix(name, []byte(prefix)) {
 				s.Add(b.Stats())
 				count += 1

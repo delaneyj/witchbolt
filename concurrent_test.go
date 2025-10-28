@@ -1,4 +1,4 @@
-package bbolt_test
+package witchbolt_test
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 const (
@@ -165,11 +165,11 @@ func concurrentReadAndWrite(t *testing.T,
 	testDuration time.Duration) {
 
 	t.Log("Preparing db.")
-	db := mustCreateDB(t, &bolt.Options{
+	db := mustCreateDB(t, &witchbolt.Options{
 		PageSize: 4096,
 	})
 	defer db.Close()
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		for i := 0; i < conf.bucketCount; i++ {
 			if _, err := tx.CreateBucketIfNotExists(bucketName(i)); err != nil {
 				return err
@@ -215,13 +215,13 @@ func concurrentReadAndWrite(t *testing.T,
 // only supposed to be used by the concurrent test case. The purpose is
 // to ensure the test case can be executed on old branches or versions,
 // e.g. `release-1.3` or `1.3.[5-7]`.
-func mustCreateDB(t *testing.T, o *bolt.Options) *bolt.DB {
+func mustCreateDB(t *testing.T, o *witchbolt.Options) *witchbolt.DB {
 	f := filepath.Join(t.TempDir(), "db")
 
 	return mustOpenDB(t, f, o)
 }
 
-func mustReOpenDB(t *testing.T, db *bolt.DB, o *bolt.Options) *bolt.DB {
+func mustReOpenDB(t *testing.T, db *witchbolt.DB, o *witchbolt.Options) *witchbolt.DB {
 	f := db.Path()
 
 	t.Logf("Closing bbolt DB at: %s", f)
@@ -231,27 +231,27 @@ func mustReOpenDB(t *testing.T, db *bolt.DB, o *bolt.Options) *bolt.DB {
 	return mustOpenDB(t, f, o)
 }
 
-func mustOpenDB(t *testing.T, dbPath string, o *bolt.Options) *bolt.DB {
+func mustOpenDB(t *testing.T, dbPath string, o *witchbolt.Options) *witchbolt.DB {
 	t.Logf("Opening bbolt DB at: %s", dbPath)
 	if o == nil {
-		o = bolt.DefaultOptions
+		o = witchbolt.DefaultOptions
 	}
 
-	freelistType := bolt.FreelistArrayType
-	if env := os.Getenv("TEST_FREELIST_TYPE"); env == string(bolt.FreelistMapType) {
-		freelistType = bolt.FreelistMapType
+	freelistType := witchbolt.FreelistArrayType
+	if env := os.Getenv("TEST_FREELIST_TYPE"); env == string(witchbolt.FreelistMapType) {
+		freelistType = witchbolt.FreelistMapType
 	}
 
 	o.FreelistType = freelistType
 
-	db, err := bolt.Open(dbPath, 0600, o)
+	db, err := witchbolt.Open(dbPath, 0600, o)
 	require.NoError(t, err)
 
 	return db
 }
 
-func checkConsistency(t *testing.T, db *bolt.DB) error {
-	return db.View(func(tx *bolt.Tx) error {
+func checkConsistency(t *testing.T, db *witchbolt.DB) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		cnt := 0
 		for err := range tx.Check() {
 			t.Errorf("Consistency error: %v", err)
@@ -272,7 +272,7 @@ workers, which execute different operations, including `Read`,
 *********************************************************
 */
 func runWorkers(t *testing.T,
-	db *bolt.DB,
+	db *witchbolt.DB,
 	workerCount int,
 	conf concurrentConfig,
 	testDuration time.Duration) historyRecords {
@@ -333,7 +333,7 @@ func runWorker(t *testing.T, w *worker, errCh chan error) (historyRecords, error
 
 type worker struct {
 	id int
-	db *bolt.DB
+	db *witchbolt.DB
 
 	conf concurrentConfig
 
@@ -360,7 +360,7 @@ func (w *worker) run() (historyRecords, error) {
 		default:
 		}
 
-		err := w.db.Update(func(tx *bolt.Tx) error {
+		err := w.db.Update(func(tx *witchbolt.Tx) error {
 			for {
 				op := w.pickOperation()
 				bucket, key := w.pickBucket(), w.pickKey()
@@ -421,7 +421,7 @@ func (w *worker) pickOperation() OperationType {
 	panic("unexpected")
 }
 
-func executeOperation(op OperationType, tx *bolt.Tx, bucket []byte, key []byte, conf concurrentConfig) (historyRecord, error) {
+func executeOperation(op OperationType, tx *witchbolt.Tx, bucket []byte, key []byte, conf concurrentConfig) (historyRecord, error) {
 	switch op {
 	case Read:
 		return executeRead(tx, bucket, key, conf.readInterval)
@@ -434,7 +434,7 @@ func executeOperation(op OperationType, tx *bolt.Tx, bucket []byte, key []byte, 
 	}
 }
 
-func executeRead(tx *bolt.Tx, bucket []byte, key []byte, readInterval duration) (historyRecord, error) {
+func executeRead(tx *witchbolt.Tx, bucket []byte, key []byte, readInterval duration) (historyRecord, error) {
 	var rec historyRecord
 
 	b := tx.Bucket(bucket)
@@ -462,7 +462,7 @@ func executeRead(tx *bolt.Tx, bucket []byte, key []byte, readInterval duration) 
 	return rec, nil
 }
 
-func executeWrite(tx *bolt.Tx, bucket []byte, key []byte, writeBytes bytesRange, noopWriteRatio int) (historyRecord, error) {
+func executeWrite(tx *witchbolt.Tx, bucket []byte, key []byte, writeBytes bytesRange, noopWriteRatio int) (historyRecord, error) {
 	var rec historyRecord
 
 	if mrand.Intn(100) < noopWriteRatio {
@@ -501,7 +501,7 @@ func executeWrite(tx *bolt.Tx, bucket []byte, key []byte, writeBytes bytesRange,
 	return rec, putErr
 }
 
-func executeDelete(tx *bolt.Tx, bucket []byte, key []byte) (historyRecord, error) {
+func executeDelete(tx *witchbolt.Tx, bucket []byte, key []byte) (historyRecord, error) {
 	var rec historyRecord
 
 	b := tx.Bucket(bucket)
@@ -543,7 +543,7 @@ Functions for persisting test data, including db file
 and operation history
 *********************************************************
 */
-func saveDataIfFailed(t *testing.T, db *bolt.DB, rs historyRecords, force bool) {
+func saveDataIfFailed(t *testing.T, db *witchbolt.DB, rs historyRecords, force bool) {
 	if t.Failed() || force {
 		t.Log("Saving data...")
 		dbPath := db.Path()
@@ -769,29 +769,29 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 	testCases := []struct {
 		name           string
 		noFreelistSync bool
-		freelistType   bolt.FreelistType
+		freelistType   witchbolt.FreelistType
 	}{
 		// [array] freelist
 		{
 			name:           "sync array freelist",
 			noFreelistSync: false,
-			freelistType:   bolt.FreelistArrayType,
+			freelistType:   witchbolt.FreelistArrayType,
 		},
 		{
 			name:           "not sync array freelist",
 			noFreelistSync: true,
-			freelistType:   bolt.FreelistArrayType,
+			freelistType:   witchbolt.FreelistArrayType,
 		},
 		// [map] freelist
 		{
 			name:           "sync map freelist",
 			noFreelistSync: false,
-			freelistType:   bolt.FreelistMapType,
+			freelistType:   witchbolt.FreelistMapType,
 		},
 		{
 			name:           "not sync map freelist",
 			noFreelistSync: true,
-			freelistType:   bolt.FreelistMapType,
+			freelistType:   witchbolt.FreelistMapType,
 		},
 	}
 
@@ -804,7 +804,7 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 				bucket = []byte("data")
 				key    = []byte("mykey")
 
-				option = &bolt.Options{
+				option = &witchbolt.Options{
 					PageSize:       4096,
 					NoFreelistSync: tc.noFreelistSync,
 					FreelistType:   tc.freelistType,
@@ -822,7 +822,7 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 			}()
 
 			// Create lots of K/V to allocate some pages
-			err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *witchbolt.Tx) error {
 				b, err := tx.CreateBucketIfNotExists(bucket)
 				if err != nil {
 					return err
@@ -838,7 +838,7 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 			require.NoError(t, err)
 
 			// Remove all K/V to create some free pages
-			err = db.Update(func(tx *bolt.Tx) error {
+			err = db.Update(func(tx *witchbolt.Tx) error {
 				b := tx.Bucket(bucket)
 				for i := 0; i < 1000; i++ {
 					k := fmt.Sprintf("key_%d", i)
@@ -885,7 +885,7 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 
 				t.Logf("Perform %d write operations after starting a long running read operation", writeOperationCountInBetween)
 				for j := 0; j < writeOperationCountInBetween; j++ {
-					err := db.Update(func(tx *bolt.Tx) error {
+					err := db.Update(func(tx *witchbolt.Tx) error {
 						_, eerr := executeWrite(tx, bucket, key, writeBytes, 0)
 						return eerr
 					})
@@ -905,7 +905,7 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 						return
 					default:
 					}
-					err := db.Update(func(tx *bolt.Tx) error {
+					err := db.Update(func(tx *witchbolt.Tx) error {
 						_, eerr := executeWrite(tx, bucket, key, writeBytes, 0)
 						return eerr
 					})
@@ -927,8 +927,8 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 	}
 }
 
-func executeLongRunningRead(t *testing.T, name string, db *bolt.DB, bucket []byte, key []byte, readInterval duration, stopCh chan struct{}) error {
-	err := db.View(func(tx *bolt.Tx) error {
+func executeLongRunningRead(t *testing.T, name string, db *witchbolt.DB, bucket []byte, key []byte, readInterval duration, stopCh chan struct{}) error {
+	err := db.View(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket(bucket)
 
 		initialVal := b.Get(key)

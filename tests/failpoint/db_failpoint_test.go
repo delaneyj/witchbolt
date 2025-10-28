@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 	gofail "go.etcd.io/gofail/runtime"
 )
 
@@ -26,7 +26,7 @@ func TestFailpoint_MapFail(t *testing.T) {
 	}()
 
 	f := filepath.Join(t.TempDir(), "db")
-	_, err = bolt.Open(f, 0600, nil)
+	_, err = witchbolt.Open(f, 0600, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "map somehow failed")
 }
@@ -40,14 +40,14 @@ func TestFailpoint_UnmapFail_DbClose(t *testing.T) {
 
 	err := gofail.Enable("unmapError", `return("unmap somehow failed")`)
 	require.NoError(t, err)
-	_, err = bolt.Open(f, 0600, nil)
+	_, err = witchbolt.Open(f, 0600, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "unmap somehow failed")
 	//disable the error, and try to reopen the db
 	err = gofail.Disable("unmapError")
 	require.NoError(t, err)
 
-	db, err := bolt.Open(f, 0600, &bolt.Options{Timeout: 30 * time.Second})
+	db, err := witchbolt.Open(f, 0600, &witchbolt.Options{Timeout: 30 * time.Second})
 	require.NoError(t, err)
 	err = db.Close()
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestFailpoint_mLockFail(t *testing.T) {
 	require.NoError(t, err)
 
 	f := filepath.Join(t.TempDir(), "db")
-	_, err = bolt.Open(f, 0600, &bolt.Options{Mlock: true})
+	_, err = witchbolt.Open(f, 0600, &witchbolt.Options{Mlock: true})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "mlock somehow failed")
 
@@ -66,7 +66,7 @@ func TestFailpoint_mLockFail(t *testing.T) {
 	err = gofail.Disable("mlockError")
 	require.NoError(t, err)
 
-	_, err = bolt.Open(f, 0600, &bolt.Options{Mlock: true})
+	_, err = witchbolt.Open(f, 0600, &witchbolt.Options{Mlock: true})
 	require.NoError(t, err)
 }
 
@@ -170,10 +170,10 @@ func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 //
 // REF: https://github.com/etcd-io/bbolt/issues/72
 func TestIssue72(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 
 	bucketName := []byte(t.Name())
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		_, txerr := tx.CreateBucket(bucketName)
 		return txerr
 	})
@@ -190,7 +190,7 @@ func TestIssue72(t *testing.T) {
 	// |1 |2 |   |3 |4 |  |10|11|12|
 	// +--+--+   +--+--+  +--+--+--+
 	//
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		bk := tx.Bucket(bucketName)
 
 		for _, id := range []int{1, 2, 3, 4, 10, 11, 12} {
@@ -215,7 +215,7 @@ func TestIssue72(t *testing.T) {
 	//
 	key := idToBytes(13)
 	updatedKey := idToBytes(1)
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		bk := tx.Bucket(bucketName)
 
 		go func() {
@@ -245,7 +245,7 @@ func TestIssue72(t *testing.T) {
 	// +v-+--+--+--+---+
 	// |1 |10|11|12|100|
 	// +--+--+--+--+---+
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		return tx.Bucket(bucketName).Put(idToBytes(100), make([]byte, 100))
 	})
 	require.NoError(t, err)
@@ -257,7 +257,7 @@ func TestIssue72(t *testing.T) {
 	}()
 
 	// Add more keys to ensure branch node to spill.
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		bk := tx.Bucket(bucketName)
 
 		for _, id := range []int{101, 102, 103, 104, 105} {
@@ -271,13 +271,13 @@ func TestIssue72(t *testing.T) {
 }
 
 func TestTx_Rollback_Freelist(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 
 	bucketName := []byte("data")
 
 	t.Log("Populate some data to have at least 5 leaf pages.")
 	var keys []string
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		b, terr := tx.CreateBucket(bucketName)
 		if terr != nil {
 			return terr
@@ -300,7 +300,7 @@ func TestTx_Rollback_Freelist(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Remove some keys to have at least 3 more free pages.")
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket(bucketName)
 		for i := 0; i < 6; i++ {
 			if terr := b.Delete([]byte(keys[i])); terr != nil {
@@ -327,7 +327,7 @@ func TestTx_Rollback_Freelist(t *testing.T) {
 	require.Greater(t, len(beforeFreelistPgids), 0)
 
 	t.Log("Simulate TXN rollback")
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket(bucketName)
 		for i := 6; i < len(keys); i++ {
 			v := make([]byte, 1500)

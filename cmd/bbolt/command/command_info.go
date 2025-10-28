@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 func newInfoCommand() *cobra.Command {
@@ -27,7 +27,7 @@ func infoFunc(cmd *cobra.Command, dbPath string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{
+	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
 		ReadOnly: true,
 	})
 	if err != nil {

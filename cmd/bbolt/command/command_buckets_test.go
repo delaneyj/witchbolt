@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 // Ensure the "buckets" command can print a list of buckets.
@@ -34,7 +34,7 @@ func TestBucketsCommand_Run(t *testing.T) {
 
 			t.Log("Creating sample DB")
 			db := btesting.MustCreateDB(t)
-			if err := db.Update(func(tx *bolt.Tx) error {
+			if err := db.Update(func(tx *witchbolt.Tx) error {
 				for _, name := range []string{"foo", "bar", "baz"} {
 					_, err := tx.CreateBucket([]byte(name))
 					if err != nil {

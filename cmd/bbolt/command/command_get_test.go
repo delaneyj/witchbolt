@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 func TestGetCommand_Run(t *testing.T) {
@@ -45,7 +45,7 @@ func TestGetCommand_Run(t *testing.T) {
 			db := btesting.MustCreateDB(t)
 
 			t.Log("Inserting test data")
-			err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *witchbolt.Tx) error {
 				b, err := tx.CreateBucketIfNotExists([]byte(tc.testBucket))
 				if err != nil {
 					return fmt.Errorf("create bucket %q: %w", tc.testBucket, err)

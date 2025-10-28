@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
 type checkOptions struct {
@@ -39,7 +39,7 @@ func checkFunc(cmd *cobra.Command, dbPath string, cfg checkOptions) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{
+	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -48,12 +48,12 @@ func checkFunc(cmd *cobra.Command, dbPath string, cfg checkOptions) error {
 	}
 	defer db.Close()
 
-	opts := []bolt.CheckOption{bolt.WithKVStringer(CmdKvStringer())}
+	opts := []witchbolt.CheckOption{witchbolt.WithKVStringer(CmdKvStringer())}
 	if cfg.fromPageID != 0 {
-		opts = append(opts, bolt.WithPageId(cfg.fromPageID))
+		opts = append(opts, witchbolt.WithPageId(cfg.fromPageID))
 	}
 	// Perform consistency check.
-	return db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		var count int
 		for err := range tx.Check(opts...) {
 			fmt.Fprintln(cmd.OutOrStdout(), err)

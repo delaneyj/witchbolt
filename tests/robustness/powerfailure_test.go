@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 
-	"go.etcd.io/bbolt/tests/dmflakey"
+	"github.com/delaneyj/witchbolt/tests/dmflakey"
 )
 
 var panicFailpoints = []string{

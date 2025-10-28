@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 // Ensure the "compact" command can print a list of buckets.
@@ -21,7 +21,7 @@ func TestCompactCommand_Run(t *testing.T) {
 
 	t.Log("Creating sample DB")
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		n := 2 + rand.Intn(5)
 		for i := 0; i < n; i++ {
 			k := []byte(fmt.Sprintf("b%d", i))
@@ -42,7 +42,7 @@ func TestCompactCommand_Run(t *testing.T) {
 	}
 
 	// make the db grow by adding large values, and delete them.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("large_vals"))
 		if err != nil {
 			return err
@@ -62,7 +62,7 @@ func TestCompactCommand_Run(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		c := tx.Bucket([]byte("large_vals")).Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
 			if err := c.Delete(); err != nil {

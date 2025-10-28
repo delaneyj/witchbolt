@@ -15,9 +15,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
 func loadMetaPage(t *testing.T, dbPath string, pageID uint64) *common.Meta {
@@ -81,7 +81,7 @@ func (b *ConcurrentBuffer) String() string {
 	return b.buf.String()
 }
 
-func fillBucket(b *bolt.Bucket, prefix []byte) error {
+func fillBucket(b *witchbolt.Bucket, prefix []byte) error {
 	n := 10 + rand.Intn(50)
 	for i := 0; i < n; i++ {
 		v := make([]byte, 10*(1+rand.Intn(4)))
@@ -114,14 +114,14 @@ func fillBucket(b *bolt.Bucket, prefix []byte) error {
 }
 
 func chkdb(path string) ([]byte, error) {
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := witchbolt.Open(path, 0600, &witchbolt.Options{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 	var buf bytes.Buffer
-	err = db.View(func(tx *bolt.Tx) error {
-		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+	err = db.View(func(tx *witchbolt.Tx) error {
+		return tx.ForEach(func(name []byte, b *witchbolt.Bucket) error {
 			return walkBucket(b, name, nil, &buf)
 		})
 	})
@@ -131,7 +131,7 @@ func chkdb(path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func walkBucket(parent *bolt.Bucket, k []byte, v []byte, w io.Writer) error {
+func walkBucket(parent *witchbolt.Bucket, k []byte, v []byte, w io.Writer) error {
 	if _, err := fmt.Fprintf(w, "%d:%x=%x\n", parent.Sequence(), k, v); err != nil {
 		return err
 	}

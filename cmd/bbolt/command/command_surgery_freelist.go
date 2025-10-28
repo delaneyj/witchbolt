@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/surgeon"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/surgeon"
 )
 
 func newSurgeryFreelistCommand() *cobra.Command {
@@ -97,7 +97,7 @@ func surgeryFreelistRebuildFunc(srcDBPath string, cfg surgeryBaseOptions) error 
 	}
 
 	// bboltDB automatically reconstruct & sync freelist in write mode.
-	db, err := bolt.Open(cfg.outputDBFilePath, fi.Mode(), &bolt.Options{NoFreelistSync: false})
+	db, err := witchbolt.Open(cfg.outputDBFilePath, fi.Mode(), &witchbolt.Options{NoFreelistSync: false})
 	if err != nil {
 		return fmt.Errorf("[freelist rebuild] open db file failed: %w", err)
 	}

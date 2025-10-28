@@ -7,15 +7,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 func TestSurgery_Freelist_Abandon(t *testing.T) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
@@ -57,13 +57,13 @@ func TestSurgery_Freelist_Rebuild(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			pageSize := 4096
-			db := btesting.MustCreateDBWithOption(t, &bolt.Options{
+			db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{
 				PageSize:       pageSize,
 				NoFreelistSync: !tc.hasFreelist,
 			})
 			srcPath := db.Path()
 
-			err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *witchbolt.Tx) error {
 				// do nothing
 				return nil
 			})

@@ -5,14 +5,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 func TestInspect(t *testing.T) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 	db.Close()
 

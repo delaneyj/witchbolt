@@ -16,8 +16,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 var benchBucketName = []byte("bench")
@@ -54,7 +54,7 @@ func (o *benchOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.cpuProfile, "cpuprofile", "", "")
 	fs.StringVar(&o.memProfile, "memprofile", "", "")
 	fs.StringVar(&o.blockProfile, "blockprofile", "", "")
-	fs.Float64Var(&o.fillPercent, "fill-percent", bolt.DefaultFillPercent, "")
+	fs.Float64Var(&o.fillPercent, "fill-percent", witchbolt.DefaultFillPercent, "")
 	fs.BoolVar(&o.noSync, "no-sync", false, "")
 	fs.BoolVar(&o.work, "work", false, "")
 	fs.StringVar(&o.path, "path", "", "")
@@ -142,10 +142,10 @@ func benchFunc(cmd *cobra.Command, options *benchOptions) error {
 	}
 
 	// Create database.
-	dbOptions := *bolt.DefaultOptions
+	dbOptions := *witchbolt.DefaultOptions
 	dbOptions.PageSize = options.pageSize
 	dbOptions.InitialMmapSize = options.initialMmapSize
-	db, err := bolt.Open(options.path, 0600, &dbOptions)
+	db, err := witchbolt.Open(options.path, 0600, &dbOptions)
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func benchFunc(cmd *cobra.Command, options *benchOptions) error {
 	return nil
 }
 
-func runWrites(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
+func runWrites(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
 	// Start profiling for writes.
 	if options.profileMode == "rw" || options.profileMode == "w" {
 		startProfiling(cmd, options)
@@ -233,37 +233,37 @@ func runWrites(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *
 	return keys, err
 }
 
-func runWritesSequential(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
+func runWritesSequential(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
 	var i = uint32(0)
 	return runWritesWithSource(cmd, db, options, results, func() uint32 { i++; return i })
 }
 
-func runWritesSequentialAndDelete(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
+func runWritesSequentialAndDelete(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
 	var i = uint32(0)
 	return runWritesDeletesWithSource(cmd, db, options, results, func() uint32 { i++; return i })
 }
 
-func runWritesRandom(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
+func runWritesRandom(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
 	return runWritesWithSource(cmd, db, options, results, func() uint32 { return r.Uint32() })
 }
 
-func runWritesSequentialNested(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
+func runWritesSequentialNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) ([]nestedKey, error) {
 	var i = uint32(0)
 	return runWritesNestedWithSource(cmd, db, options, results, func() uint32 { i++; return i })
 }
 
-func runWritesRandomNested(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
+func runWritesRandomNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, r *rand.Rand) ([]nestedKey, error) {
 	return runWritesNestedWithSource(cmd, db, options, results, func() uint32 { return r.Uint32() })
 }
 
-func runWritesWithSource(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
+func runWritesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
 	var keys []nestedKey
 	if options.readMode == "rnd" {
 		keys = make([]nestedKey, 0, options.iterations)
 	}
 
 	for i := int64(0); i < options.iterations; i += options.batchSize {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		if err := db.Update(func(tx *witchbolt.Tx) error {
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.fillPercent
 
@@ -294,13 +294,13 @@ func runWritesWithSource(cmd *cobra.Command, db *bolt.DB, options *benchOptions,
 	return keys, nil
 }
 
-func runWritesDeletesWithSource(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
+func runWritesDeletesWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
 	var keys []nestedKey
 	deleteSize := int64(math.Ceil(float64(options.batchSize) * options.deleteFraction))
 	var InsertedKeys [][]byte
 
 	for i := int64(0); i < options.iterations; i += options.batchSize {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		if err := db.Update(func(tx *witchbolt.Tx) error {
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.fillPercent
 
@@ -341,14 +341,14 @@ func runWritesDeletesWithSource(cmd *cobra.Command, db *bolt.DB, options *benchO
 	return keys, nil
 }
 
-func runWritesNestedWithSource(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
+func runWritesNestedWithSource(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keySource func() uint32) ([]nestedKey, error) {
 	var keys []nestedKey
 	if options.readMode == "rnd" {
 		keys = make([]nestedKey, 0, options.iterations)
 	}
 
 	for i := int64(0); i < options.iterations; i += options.batchSize {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		if err := db.Update(func(tx *witchbolt.Tx) error {
 			top, err := tx.CreateBucketIfNotExists(benchBucketName)
 			if err != nil {
 				return err
@@ -393,7 +393,7 @@ func runWritesNestedWithSource(cmd *cobra.Command, db *bolt.DB, options *benchOp
 	return keys, nil
 }
 
-func runReads(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults, keys []nestedKey) error {
+func runReads(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults, keys []nestedKey) error {
 	// Start profiling for reads.
 	if options.profileMode == "r" {
 		startProfiling(cmd, options)
@@ -438,8 +438,8 @@ func runReads(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *b
 
 type nestedKey struct{ bucket, key []byte }
 
-func runReadsSequential(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults) error {
-	return db.View(func(tx *bolt.Tx) error {
+func runReadsSequential(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
 		for {
@@ -476,8 +476,8 @@ func runReadsSequential(cmd *cobra.Command, db *bolt.DB, options *benchOptions, 
 	})
 }
 
-func runReadsRandom(cmd *cobra.Command, db *bolt.DB, options *benchOptions, keys []nestedKey, results *benchResults) error {
-	return db.View(func(tx *bolt.Tx) error {
+func runReadsRandom(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, keys []nestedKey, results *benchResults) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
 		for {
@@ -515,8 +515,8 @@ func runReadsRandom(cmd *cobra.Command, db *bolt.DB, options *benchOptions, keys
 	})
 }
 
-func runReadsSequentialNested(cmd *cobra.Command, db *bolt.DB, options *benchOptions, results *benchResults) error {
-	return db.View(func(tx *bolt.Tx) error {
+func runReadsSequentialNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, results *benchResults) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
 		for {
@@ -552,8 +552,8 @@ func runReadsSequentialNested(cmd *cobra.Command, db *bolt.DB, options *benchOpt
 	})
 }
 
-func runReadsRandomNested(cmd *cobra.Command, db *bolt.DB, options *benchOptions, nestedKeys []nestedKey, results *benchResults) error {
-	return db.View(func(tx *bolt.Tx) error {
+func runReadsRandomNested(cmd *cobra.Command, db *witchbolt.DB, options *benchOptions, nestedKeys []nestedKey, results *benchResults) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		t := time.Now()
 
 		for {

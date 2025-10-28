@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 // Ensure the "keys" command can print a list of keys for a bucket.
@@ -40,7 +40,7 @@ func TestKeysCommand_Run(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Creating test database for subtest '%s'", tc.name)
 			db := btesting.MustCreateDB(t)
-			err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *witchbolt.Tx) error {
 				t.Logf("creating test bucket %s", tc.testBucket)
 				b, bErr := tx.CreateBucketIfNotExists([]byte(tc.testBucket))
 				if bErr != nil {

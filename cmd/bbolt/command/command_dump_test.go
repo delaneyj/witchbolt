@@ -9,14 +9,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 func TestDumpCommand_Run(t *testing.T) {
 	t.Log("Creating database")
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 	require.NoError(t, db.Close())
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 

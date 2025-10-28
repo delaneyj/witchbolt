@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 // See https://github.com/etcd-io/raft/blob/main/logger.go
 import (

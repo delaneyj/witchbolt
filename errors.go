@@ -1,6 +1,6 @@
-package bbolt
+package witchbolt
 
-import "go.etcd.io/bbolt/errors"
+import "github.com/delaneyj/witchbolt/errors"
 
 // These errors can be returned when opening or calling methods on a DB.
 var (

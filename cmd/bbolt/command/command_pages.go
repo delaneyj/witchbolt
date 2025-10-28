@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 type PageError struct {
@@ -47,7 +47,7 @@ func pagesFunc(cmd *cobra.Command, dbPath string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{
+	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -60,7 +60,7 @@ func pagesFunc(cmd *cobra.Command, dbPath string) error {
 	fmt.Fprintln(cmd.OutOrStdout(), "ID       TYPE       ITEMS  OVRFLW")
 	fmt.Fprintln(cmd.OutOrStdout(), "======== ========== ====== ======")
 
-	return db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *witchbolt.Tx) error {
 		var id int
 		for {
 			p, err := tx.Page(id)

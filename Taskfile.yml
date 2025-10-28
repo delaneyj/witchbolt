@@ -1,0 +1,106 @@
+version: '3'
+
+vars:
+  GOFILES: |
+    {{- shell "find . -name '*.go'" -}}
+
+tasks:
+  fmt:
+    desc: Verify Go formatting (gofmt/goimports)
+    cmds:
+      - echo "Verifying gofmt, failures can be fixed with ./scripts/fix.sh"
+      - cmd: gofmt -l -s -d {{.GOFILES}}
+        silent: true
+        ignore_error: true
+      - cmd: bash -lc '[ -z "$(gofmt -l -s {{.GOFILES}})" ]'
+        silent: true
+      - echo "Verifying goimports, failures can be fixed with ./scripts/fix.sh"
+      - cmd: go tool golang.org/x/tools/cmd/goimports -l -d {{.GOFILES}}
+        silent: true
+        ignore_error: true
+      - cmd: bash -lc '[ -z "$(go tool golang.org/x/tools/cmd/goimports -l {{.GOFILES}})" ]'
+        silent: true
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  test:
+    desc: Run go test matrix for hash/array freelists
+    vars:
+      TESTFLAGS_RACE: '{{default "false" .ENABLE_RACE}}'
+      TESTFLAGS_CPU: '{{default "" .CPU}}'
+      EXTRA: '{{default "" .EXTRA_TESTFLAGS}}'
+      TIMEOUT: '{{default "30m" .TIMEOUT}}'
+    cmds:
+      - echo "hashmap freelist test"
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} -timeout {{.TIMEOUT}}
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./internal/... -timeout {{.TIMEOUT}}
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./cmd/bbolt/... -timeout {{.TIMEOUT}}
+      - echo "array freelist test"
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} -timeout {{.TIMEOUT}}
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./internal/... -timeout {{.TIMEOUT}}
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v {{if eq .TESTFLAGS_RACE "true"}}-race{{end}} {{if .TESTFLAGS_CPU}}-cpu={{.TESTFLAGS_CPU}}{{end}} {{.EXTRA}} ./cmd/bbolt/... -timeout {{.TIMEOUT}}
+
+  coverage:
+    desc: Generate coverage profiles for freelists
+    cmds:
+      - echo "hashmap freelist test"
+      - TEST_FREELIST_TYPE=hashmap go test -v -timeout {{default "30m" .TIMEOUT}} \
+          -coverprofile cover-freelist-hashmap.out -covermode atomic
+      - echo "array freelist test"
+      - TEST_FREELIST_TYPE=array go test -v -timeout {{default "30m" .TIMEOUT}} \
+          -coverprofile cover-freelist-array.out -covermode atomic
+
+  build:
+    desc: Build CLI binary
+    cmds:
+      - go build -o bin/bbolt ./cmd/bbolt
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f ./bin/bbolt
+
+  gofail-enable:
+    desc: Enable gofail failpoints
+    cmds:
+      - go tool go.etcd.io/gofail enable .
+
+  gofail-disable:
+    desc: Disable gofail failpoints
+    cmds:
+      - go tool go.etcd.io/gofail disable .
+
+  test-failpoint:
+    desc: Run failpoint tests
+    cmds:
+      - echo "[failpoint] hashmap freelist test"
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=hashmap go test -v -timeout 30m ./tests/failpoint
+      - echo "[failpoint] array freelist test"
+      - WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v -timeout 30m ./tests/failpoint
+
+  bench:
+    desc: Run Go benchmarks (set PKG=./... BENCH='BenchmarkName')
+    vars:
+      PKG: '{{default "./..." .PKG}}'
+      BENCH: '{{default "." .BENCH}}'
+      EXTRA: '{{default "" .EXTRA}}'
+    cmds:
+      - go test -run ^$ -bench {{.BENCH}} -benchmem {{.PKG}} {{.EXTRA}}
+
+  test-robustness:
+    desc: Run robustness test suite (requires sudo)
+    deps: [gofail-enable, build]
+    cmds:
+      - sudo env PATH=$$PATH go test -v ./tests/dmflakey -test.root
+      - sudo env PATH=$(PWD)/bin:$$PATH go test -v {{default "" .ROBUSTNESS_TESTFLAGS}} ./tests/robustness -test.root
+
+  test-benchmark-compare:
+    desc: Compare benchmark results against REF
+    vars:
+      REF: '{{default "" .REF}}'
+    cmds:
+      - git fetch
+      - ./scripts/compare_benchmarks.sh {{.REF}}

@@ -8,15 +8,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/cmd/bbolt/command"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/cmd/bbolt/command"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 func TestSurgery_Meta_Validate(t *testing.T) {
 	pageSize := 4096
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
@@ -78,7 +78,7 @@ func TestSurgery_Meta_Update(t *testing.T) {
 
 			t.Run(tc.name, func(t *testing.T) {
 				pageSize := 4096
-				db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+				db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: pageSize})
 				srcPath := db.Path()
 
 				defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())

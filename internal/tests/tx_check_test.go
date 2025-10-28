@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/guts_cli"
-	"go.etcd.io/bbolt/internal/surgeon"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt/internal/surgeon"
 )
 
 func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
@@ -38,7 +38,7 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 
 	db.MustReopen()
 	db.ForceDisableStrictMode()
-	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+	require.NoError(t, db.Update(func(tx *witchbolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {
@@ -76,7 +76,7 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 
 	db.MustReopen()
 	db.ForceDisableStrictMode()
-	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+	require.NoError(t, db.Update(func(tx *witchbolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {

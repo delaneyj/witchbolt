@@ -10,8 +10,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	bolt "go.etcd.io/bbolt"
-	berrors "go.etcd.io/bbolt/errors"
+	"github.com/delaneyj/witchbolt"
+	berrors "github.com/delaneyj/witchbolt/errors"
 )
 
 func checkSourceDBPath(srcPath string) (os.FileInfo, error) {
@@ -121,11 +121,11 @@ func (cmdKvStringer) ValueToString(value []byte) string {
 	return bytesToAsciiOrHex(value)
 }
 
-func CmdKvStringer() bolt.KVStringer {
+func CmdKvStringer() witchbolt.KVStringer {
 	return cmdKvStringer{}
 }
 
-func findLastBucket(tx *bolt.Tx, bucketNames []string) (*bolt.Bucket, error) {
+func findLastBucket(tx *witchbolt.Tx, bucketNames []string) (*witchbolt.Bucket, error) {
 	lastbucket := tx.Bucket([]byte(bucketNames[0]))
 	if lastbucket == nil {
 		return nil, berrors.ErrBucketNotFound

@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 func newBucketsCommand() *cobra.Command {
@@ -27,7 +27,7 @@ func bucketsFunc(cmd *cobra.Command, dbPath string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(dbPath, 0600, &bolt.Options{
+	db, err := witchbolt.Open(dbPath, 0600, &witchbolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -37,8 +37,8 @@ func bucketsFunc(cmd *cobra.Command, dbPath string) error {
 	defer db.Close()
 
 	// Print buckets.
-	return db.View(func(tx *bolt.Tx) error {
-		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
+	return db.View(func(tx *witchbolt.Tx) error {
+		return tx.ForEach(func(name []byte, _ *witchbolt.Bucket) error {
 			fmt.Fprintln(cmd.OutOrStdout(), string(name))
 			return nil
 		})

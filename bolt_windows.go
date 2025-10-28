@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 import (
 	"fmt"
@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // fdatasync flushes written data to a file descriptor.
