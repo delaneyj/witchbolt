@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 import (
 	"errors"
@@ -12,8 +12,9 @@ import (
 	"time"
 	"unsafe"
 
-	berrors "go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/common"
+	berrors "github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
 )
 
 // Tx represents a read-only or read/write transaction on the database.
@@ -228,10 +229,10 @@ func (tx *Tx) Commit() (err error) {
 
 	// If the high water mark has moved up then attempt to grow the database.
 	if tx.meta.Pgid() > opgid {
-		_ = errors.New("")
-		// gofail: var lackOfDiskSpace string
-		// tx.rollback()
-		// return errors.New(lackOfDiskSpace)
+		if msg, ok := fp.Inject("lackOfDiskSpace"); ok {
+			tx.rollback()
+			return errors.New(msg)
+		}
 		if err = tx.db.grow(int(tx.meta.Pgid()+1) * tx.db.pageSize); err != nil {
 			lg.Errorf("growing db size failed, pgid: %d, pagesize: %d, error: %v", tx.meta.Pgid(), tx.db.pageSize, err)
 			tx.rollback()
@@ -517,7 +518,7 @@ func (tx *Tx) allocate(count int) (*common.Page, error) {
 }
 
 // write writes any dirty pages to disk.
-func (tx *Tx) write() error {
+func (tx *Tx) write() (err error) {
 	// Sort pages by id.
 	lg := tx.db.Logger()
 	pages := make(common.Pages, 0, len(tx.pages))
@@ -527,6 +528,11 @@ func (tx *Tx) write() error {
 	// Clear out page cache early.
 	tx.pages = make(map[common.Pgid]*common.Page)
 	sort.Sort(pages)
+
+	// Capture page frames before writing so we can run observers post-commit.
+	if err := tx.preparePageFlush(pages); err != nil {
+		return err
+	}
 
 	// Write pages to disk in order.
 	for _, p := range pages {
@@ -542,8 +548,8 @@ func (tx *Tx) write() error {
 			}
 			buf := common.UnsafeByteSlice(unsafe.Pointer(p), written, 0, int(sz))
 
-			if _, err := tx.db.ops.writeAt(buf, offset); err != nil {
-				lg.Errorf("writeAt failed, offset: %d: %w", offset, err)
+			if _, err = tx.db.ops.writeAt(buf, offset); err != nil {
+				lg.Errorf("writeAt failed, offset: %d: %v", offset, err)
 				return err
 			}
 
@@ -564,9 +570,9 @@ func (tx *Tx) write() error {
 
 	// Ignore file sync if flag is set on DB.
 	if !tx.db.NoSync || common.IgnoreNoSync {
-		// gofail: var beforeSyncDataPages struct{}
-		if err := fdatasync(tx.db); err != nil {
-			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+		fp.InjectStruct("beforeSyncDataPages")
+		if err = fdatasync(tx.db); err != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %v", runtime.GOOS, runtime.GOARCH, err)
 			return err
 		}
 	}
@@ -591,10 +597,70 @@ func (tx *Tx) write() error {
 	return nil
 }
 
+func (tx *Tx) preparePageFlush(pages common.Pages) error {
+	observers := tx.db.getPageFlushObservers()
+	if len(observers) == 0 {
+		return nil
+	}
+
+	currentTxID := uint64(tx.meta.Txid())
+	var parentTxID uint64
+	if currentTxID > 0 {
+		parentTxID = currentTxID - 1
+	}
+
+	frames := make([]PageFrame, 0, len(pages))
+	for _, page := range pages {
+		frame := PageFrame{
+			ID:       uint64(page.Id()),
+			Overflow: uint32(page.Overflow()),
+			Data:     copyPagePayload(page, tx.db.pageSize),
+		}
+		if err := frame.validate(tx.db.pageSize); err != nil {
+			return err
+		}
+		frames = append(frames, frame)
+	}
+
+	info := PageFlushInfo{
+		TxID:          currentTxID,
+		ParentTxID:    parentTxID,
+		DBPath:        tx.db.Path(),
+		PageSize:      tx.db.pageSize,
+		PageCount:     len(frames),
+		HighWaterMark: uint64(tx.meta.Pgid()),
+		Timestamp:     time.Now(),
+		Frames:        frames,
+	}
+
+	db := tx.db
+	for _, observer := range observers {
+		obs := observer
+		tx.OnCommit(func() {
+			if err := obs.OnPageFlush(info); err != nil {
+				if db != nil {
+					db.Logger().Errorf("page flush observer error: %v", err)
+				}
+			}
+		})
+	}
+
+	return nil
+}
+
+func copyPagePayload(p *common.Page, pageSize int) []byte {
+	length := (int(p.Overflow()) + 1) * pageSize
+	src := common.UnsafeByteSlice(unsafe.Pointer(p), 0, 0, length)
+	dup := make([]byte, length)
+	copy(dup, src)
+	return dup
+}
+
 // writeMeta writes the meta to the disk.
 func (tx *Tx) writeMeta() error {
-	// gofail: var beforeWriteMetaError string
-	// return errors.New(beforeWriteMetaError)
+	if msg, ok := fp.Inject("beforeWriteMetaError"); ok {
+		return errors.New(msg)
+	}
 
 	// Create a temporary buffer for the meta page.
 	lg := tx.db.Logger()
@@ -611,7 +677,7 @@ func (tx *Tx) writeMeta() error {
 	}
 	tx.db.metalock.Unlock()
 	if !tx.db.NoSync || common.IgnoreNoSync {
-		// gofail: var beforeSyncMetaPage struct{}
+		fp.InjectStruct("beforeSyncMetaPage")
 		if err := fdatasync(tx.db); err != nil {
 			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
 			return err

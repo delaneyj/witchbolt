@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 
-	"go.etcd.io/bbolt/tests/dmflakey"
+	"github.com/delaneyj/witchbolt/tests/dmflakey"
 )
 
 var panicFailpoints = []string{
@@ -84,6 +84,11 @@ func TestRestartFromPowerFailureExt4(t *testing.T) {
 }
 
 func TestRestartFromPowerFailureXFS(t *testing.T) {
+	// Skip all XFS tests if mkfs.xfs is not available
+	if _, err := exec.LookPath("mkfs.xfs"); err != nil {
+		t.Skip("mkfs.xfs not found, skipping XFS tests")
+	}
+
 	for _, tc := range []struct {
 		name         string
 		mkfsOpt      string
@@ -145,7 +150,7 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 
 	dbPath := filepath.Join(root, "boltdb")
 
-	args := []string{"bbolt", "bench",
+	args := []string{"witchbolt", "bench",
 		"--work", // keep the database
 		"--path", dbPath,
 		"--count=1000000000",
@@ -191,13 +196,13 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 		t.Logf("random pick failpoint: %s", targetFp)
 		activeFailpoint(t, fpURL, targetFp, "panic")
 	} else {
-		t.Log("kill bbolt")
+		t.Log("kill witchbolt")
 		assert.NoError(t, cmd.Process.Kill())
 	}
 
 	select {
 	case <-time.After(10 * time.Second):
-		t.Log("bbolt is supposed to be already stopped, but actually not yet; forcibly kill it")
+		t.Log("witchbolt is supposed to be already stopped, but actually not yet; forcibly kill it")
 		assert.NoError(t, cmd.Process.Kill())
 	case err := <-errCh:
 		require.Error(t, err)
@@ -209,8 +214,8 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 	t.Logf("db size: %d", st.Size())
 
 	t.Logf("verify data")
-	output, err := exec.Command("bbolt", "check", dbPath).CombinedOutput()
-	require.NoError(t, err, "bbolt check output: %s", string(output))
+	output, err := exec.Command("witchbolt", "check", dbPath).CombinedOutput()
+	require.NoError(t, err, "witchbolt check output: %s", string(output))
 }
 
 // activeFailpoint actives the failpoint by http.

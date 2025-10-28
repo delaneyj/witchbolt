@@ -1,6 +1,6 @@
 //go:build !windows
 
-package bbolt_test
+package witchbolt_test
 
 import (
 	"fmt"
@@ -8,15 +8,15 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 func TestMlock_DbOpen(t *testing.T) {
 	// 32KB
 	skipOnMemlockLimitBelow(t, 32*1024)
 
-	btesting.MustCreateDBWithOption(t, &bolt.Options{Mlock: true})
+	btesting.MustCreateDBWithOption(t, &witchbolt.Options{Mlock: true})
 }
 
 // Test change between "empty" (16KB) and "non-empty" db
@@ -24,9 +24,9 @@ func TestMlock_DbCanGrow_Small(t *testing.T) {
 	// 32KB
 	skipOnMemlockLimitBelow(t, 32*1024)
 
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{Mlock: true})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{Mlock: true})
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("bucket"))
 		if err != nil {
 			t.Fatal(err)
@@ -57,7 +57,7 @@ func TestMlock_DbCanGrow_Big(t *testing.T) {
 	chunksBefore := 64
 	chunksAfter := 64
 
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{Mlock: true})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{Mlock: true})
 
 	for chunk := 0; chunk < chunksBefore; chunk++ {
 		insertChunk(t, db, chunk)
@@ -77,7 +77,7 @@ func TestMlock_DbCanGrow_Big(t *testing.T) {
 func insertChunk(t *testing.T, db *btesting.DB, chunkId int) {
 	chunkSize := 1024
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *witchbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("bucket"))
 		if err != nil {
 			t.Fatal(err)

@@ -1,6 +1,6 @@
 //go:build !windows && !plan9 && !solaris && !aix && !android
 
-package bbolt
+package witchbolt
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // flock acquires an advisory lock on a file descriptor.

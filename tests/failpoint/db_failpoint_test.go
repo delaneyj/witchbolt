@@ -1,3 +1,5 @@
+//go:build failpoint
+
 package failpoint
 
 import (
@@ -9,24 +11,24 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/guts_cli"
-	gofail "go.etcd.io/gofail/runtime"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
 func TestFailpoint_MapFail(t *testing.T) {
-	err := gofail.Enable("mapError", `return("map somehow failed")`)
+	err := fp.Enable("mapError", `return("map somehow failed")`)
 	require.NoError(t, err)
 	defer func() {
-		err = gofail.Disable("mapError")
+		err = fp.Disable("mapError")
 		require.NoError(t, err)
 	}()
 
 	f := filepath.Join(t.TempDir(), "db")
-	_, err = bolt.Open(f, 0600, nil)
+	_, err = witchbolt.Open(f, 0600, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "map somehow failed")
 }
@@ -38,35 +40,35 @@ func TestFailpoint_UnmapFail_DbClose(t *testing.T) {
 	//otherwise the db cannot be opened.
 	f := filepath.Join(t.TempDir(), "db")
 
-	err := gofail.Enable("unmapError", `return("unmap somehow failed")`)
+	err := fp.Enable("unmapError", `return("unmap somehow failed")`)
 	require.NoError(t, err)
-	_, err = bolt.Open(f, 0600, nil)
+	_, err = witchbolt.Open(f, 0600, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "unmap somehow failed")
 	//disable the error, and try to reopen the db
-	err = gofail.Disable("unmapError")
+	err = fp.Disable("unmapError")
 	require.NoError(t, err)
 
-	db, err := bolt.Open(f, 0600, &bolt.Options{Timeout: 30 * time.Second})
+	db, err := witchbolt.Open(f, 0600, &witchbolt.Options{Timeout: 30 * time.Second})
 	require.NoError(t, err)
 	err = db.Close()
 	require.NoError(t, err)
 }
 
 func TestFailpoint_mLockFail(t *testing.T) {
-	err := gofail.Enable("mlockError", `return("mlock somehow failed")`)
+	err := fp.Enable("mlockError", `return("mlock somehow failed")`)
 	require.NoError(t, err)
 
 	f := filepath.Join(t.TempDir(), "db")
-	_, err = bolt.Open(f, 0600, &bolt.Options{Mlock: true})
+	_, err = witchbolt.Open(f, 0600, &witchbolt.Options{Mlock: true})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "mlock somehow failed")
 
 	// It should work after disabling the failpoint.
-	err = gofail.Disable("mlockError")
+	err = fp.Disable("mlockError")
 	require.NoError(t, err)
 
-	_, err = bolt.Open(f, 0600, &bolt.Options{Mlock: true})
+	_, err = witchbolt.Open(f, 0600, &witchbolt.Options{Mlock: true})
 	require.NoError(t, err)
 }
 
@@ -74,7 +76,7 @@ func TestFailpoint_mLockFail_When_remap(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	db.Mlock = true
 
-	err := gofail.Enable("mlockError", `return("mlock somehow failed in allocate")`)
+	err := fp.Enable("mlockError", `return("mlock somehow failed in allocate")`)
 	require.NoError(t, err)
 
 	err = db.Fill([]byte("data"), 1, 10000,
@@ -86,7 +88,7 @@ func TestFailpoint_mLockFail_When_remap(t *testing.T) {
 	require.ErrorContains(t, err, "mlock somehow failed in allocate")
 
 	// It should work after disabling the failpoint.
-	err = gofail.Disable("mlockError")
+	err = fp.Disable("mlockError")
 	require.NoError(t, err)
 	db.MustClose()
 	db.MustReopen()
@@ -102,7 +104,7 @@ func TestFailpoint_mLockFail_When_remap(t *testing.T) {
 func TestFailpoint_ResizeFileFail(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	err := gofail.Enable("resizeFileError", `return("resizeFile somehow failed")`)
+	err := fp.Enable("resizeFileError", `return("resizeFile somehow failed")`)
 	require.NoError(t, err)
 
 	err = db.Fill([]byte("data"), 1, 10000,
@@ -114,7 +116,7 @@ func TestFailpoint_ResizeFileFail(t *testing.T) {
 	require.ErrorContains(t, err, "resizeFile somehow failed")
 
 	// It should work after disabling the failpoint.
-	err = gofail.Disable("resizeFileError")
+	err = fp.Disable("resizeFileError")
 	require.NoError(t, err)
 	db.MustClose()
 	db.MustReopen()
@@ -130,7 +132,7 @@ func TestFailpoint_ResizeFileFail(t *testing.T) {
 func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	err := gofail.Enable("lackOfDiskSpace", `return("grow somehow failed")`)
+	err := fp.Enable("lackOfDiskSpace", `return("grow somehow failed")`)
 	require.NoError(t, err)
 
 	tx, err := db.Begin(true)
@@ -145,7 +147,7 @@ func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 	require.ErrorIs(t, err, errors.ErrTxClosed)
 
 	// It should work after disabling the failpoint.
-	err = gofail.Disable("lackOfDiskSpace")
+	err = fp.Disable("lackOfDiskSpace")
 	require.NoError(t, err)
 
 	tx, err = db.Begin(true)
@@ -161,19 +163,19 @@ func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 
 // TestIssue72 reproduces issue 72.
 //
-// When bbolt is processing a `Put` invocation, the key might be concurrently
+// When witchbolt is processing a `Put` invocation, the key might be concurrently
 // updated by the application which calls the `Put` API (although it shouldn't).
-// It might lead to a situation that bbolt use an old key to find a proper
+// It might lead to a situation that witchbolt use an old key to find a proper
 // position to insert the key/value pair, but actually inserts a new key.
 // Eventually it might break the rule that all keys should be sorted. In a
 // worse case, it might cause page elements to point to already freed pages.
 //
-// REF: https://github.com/etcd-io/bbolt/issues/72
+// REF: https://github.com/etcd-io/witchbolt/issues/72
 func TestIssue72(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 
 	bucketName := []byte(t.Name())
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		_, txerr := tx.CreateBucket(bucketName)
 		return txerr
 	})
@@ -190,7 +192,7 @@ func TestIssue72(t *testing.T) {
 	// |1 |2 |   |3 |4 |  |10|11|12|
 	// +--+--+   +--+--+  +--+--+--+
 	//
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		bk := tx.Bucket(bucketName)
 
 		for _, id := range []int{1, 2, 3, 4, 10, 11, 12} {
@@ -202,7 +204,7 @@ func TestIssue72(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, gofail.Enable("beforeBucketPut", `sleep(5000)`))
+	require.NoError(t, fp.Enable("beforeBucketPut", `sleep(5000)`))
 
 	//         +--+--+--+
 	//  +------+1 |3 |1 +---+
@@ -215,7 +217,7 @@ func TestIssue72(t *testing.T) {
 	//
 	key := idToBytes(13)
 	updatedKey := idToBytes(1)
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		bk := tx.Bucket(bucketName)
 
 		go func() {
@@ -226,9 +228,9 @@ func TestIssue72(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, gofail.Disable("beforeBucketPut"))
+	require.NoError(t, fp.Disable("beforeBucketPut"))
 
-	// bbolt inserts 100 into last branch page. Since there are two `1`
+	// witchbolt inserts 100 into last branch page. Since there are two `1`
 	// keys in branch, spill operation will update first `1` pointer and
 	// then last one won't be updated and continues to point to freed page.
 	//
@@ -245,7 +247,7 @@ func TestIssue72(t *testing.T) {
 	// +v-+--+--+--+---+
 	// |1 |10|11|12|100|
 	// +--+--+--+--+---+
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		return tx.Bucket(bucketName).Put(idToBytes(100), make([]byte, 100))
 	})
 	require.NoError(t, err)
@@ -257,7 +259,7 @@ func TestIssue72(t *testing.T) {
 	}()
 
 	// Add more keys to ensure branch node to spill.
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		bk := tx.Bucket(bucketName)
 
 		for _, id := range []int{101, 102, 103, 104, 105} {
@@ -271,13 +273,13 @@ func TestIssue72(t *testing.T) {
 }
 
 func TestTx_Rollback_Freelist(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db := btesting.MustCreateDBWithOption(t, &witchbolt.Options{PageSize: 4096})
 
 	bucketName := []byte("data")
 
 	t.Log("Populate some data to have at least 5 leaf pages.")
 	var keys []string
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *witchbolt.Tx) error {
 		b, terr := tx.CreateBucket(bucketName)
 		if terr != nil {
 			return terr
@@ -300,7 +302,7 @@ func TestTx_Rollback_Freelist(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Remove some keys to have at least 3 more free pages.")
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket(bucketName)
 		for i := 0; i < 6; i++ {
 			if terr := b.Delete([]byte(keys[i])); terr != nil {
@@ -316,10 +318,10 @@ func TestTx_Rollback_Freelist(t *testing.T) {
 	db.MustReopen()
 
 	t.Log("Enable the `beforeWriteMetaError` failpoint.")
-	require.NoError(t, gofail.Enable("beforeWriteMetaError", `return("writeMeta somehow failed")`))
+	require.NoError(t, fp.Enable("beforeWriteMetaError", `return("writeMeta somehow failed")`))
 	defer func() {
 		t.Log("Disable the `beforeWriteMetaError` failpoint.")
-		require.NoError(t, gofail.Disable("beforeWriteMetaError"))
+		require.NoError(t, fp.Disable("beforeWriteMetaError"))
 	}()
 
 	beforeFreelistPgids, err := readFreelistPageIds(db.Path())
@@ -327,7 +329,7 @@ func TestTx_Rollback_Freelist(t *testing.T) {
 	require.Greater(t, len(beforeFreelistPgids), 0)
 
 	t.Log("Simulate TXN rollback")
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *witchbolt.Tx) error {
 		b := tx.Bucket(bucketName)
 		for i := 6; i < len(keys); i++ {
 			v := make([]byte, 1500)

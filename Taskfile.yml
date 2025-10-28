@@ -1,0 +1,95 @@
+version: '3'
+
+vars:
+  TIMEOUT: '{{default "30m" .TIMEOUT}}'
+  BIN_DIR: bin
+  BINARY: witchbolt
+
+tasks:
+  fmt:
+    desc: Verify Go formatting
+    cmds:
+      - echo "Checking gofmt..."
+      - test -z "$(gofmt -l -s .)"
+      - echo "Checking goimports..."
+      - test -z "$(go tool golang.org/x/tools/cmd/goimports -l .)"
+
+  fmt:fix:
+    desc: Fix Go formatting
+    cmds:
+      - gofmt -l -s -w .
+      - go tool golang.org/x/tools/cmd/goimports -l -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run tests for both freelist types
+    vars:
+      RACE: '{{if eq .ENABLE_RACE "true"}}-race{{end}}'
+      CPU: '{{if .CPU}}-cpu={{.CPU}}{{end}}'
+    cmds:
+      - for: [hashmap, array]
+        cmd: |
+          echo "{{.ITEM}} freelist test"
+          WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE={{.ITEM}} go test -v \
+            {{.RACE}} {{.CPU}} {{.EXTRA_TESTFLAGS}} -timeout {{.TIMEOUT}} ./...
+
+  coverage:
+    desc: Generate coverage profiles for freelists
+    cmds:
+      - for: [hashmap, array]
+        cmd: |
+          echo "{{.ITEM}} freelist coverage"
+          TEST_FREELIST_TYPE={{.ITEM}} go test -v -timeout {{.TIMEOUT}} \
+            -coverprofile cover-freelist-{{.ITEM}}.out -covermode atomic
+
+  build:
+    desc: Build CLI binary
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BIN_DIR}}/{{.BINARY}} ./cmd/witchbolt
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BIN_DIR}}
+      - rm -f cover-*.out
+
+  test-failpoint:
+    desc: Run failpoint tests with failpoint build tag
+    cmds:
+      - for: [hashmap, array]
+        cmd: |
+          echo "[failpoint] {{.ITEM}} freelist test"
+          WITCHBOLT_VERIFY=all TEST_FREELIST_TYPE={{.ITEM}} go test -v -tags=failpoint -timeout 30m ./tests/failpoint
+
+  bench:
+    desc: Run benchmarks (PKG=./... BENCH=BenchmarkName)
+    vars:
+      PKG: '{{default "./..." .PKG}}'
+      BENCH: '{{default "." .BENCH}}'
+    cmds:
+      - go test -run=^$ -bench={{.BENCH}} -benchmem {{.PKG}} {{.EXTRA}}
+
+  test-robustness:
+    desc: Run robustness tests (requires sudo)
+    deps: [build]
+    cmds:
+      - sudo env "PATH=$PATH" go test -v -tags=failpoint ./tests/dmflakey -test.root
+      - sudo env "PATH={{.ROOT_DIR}}/{{.BIN_DIR}}:$PATH" go test -v -tags=failpoint {{.ROBUSTNESS_TESTFLAGS}} ./tests/robustness -test.root
+
+  test-benchmark-compare:
+    desc: Compare benchmark results against REF
+    cmds:
+      - git fetch
+      - ./scripts/compare_benchmarks.sh {{.REF}}
+
+  ci:
+    desc: Run all CI checks
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: test

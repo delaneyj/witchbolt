@@ -1,4 +1,4 @@
-package bbolt_test
+package witchbolt_test
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/btesting"
 )
 
 func TestSimulate_1op_1p(t *testing.T)     { testSimulate(t, nil, 1, 1, 1) }
@@ -30,7 +30,7 @@ func TestSimulate_10000op_100p(t *testing.T) { testSimulate(t, nil, 1, 10000, 10
 func TestSimulate_10000op_1000p(t *testing.T) { testSimulate(t, nil, 1, 10000, 1000) }
 
 // Randomly generate operations on a given database with multiple clients to ensure consistency and thread safety.
-func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, parallelism int) {
+func testSimulate(t *testing.T, openOption *witchbolt.Options, round, threadCount, parallelism int) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -152,10 +152,10 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 
 }
 
-type simulateHandler func(tx *bolt.Tx, qdb *QuickDB)
+type simulateHandler func(tx *witchbolt.Tx, qdb *QuickDB)
 
 // Retrieves a key from the database and verifies that it is what is expected.
-func simulateGetHandler(tx *bolt.Tx, qdb *QuickDB) {
+func simulateGetHandler(tx *witchbolt.Tx, qdb *QuickDB) {
 	// Randomly retrieve an existing exist.
 	keys := qdb.Rand()
 	if len(keys) == 0 {
@@ -190,7 +190,7 @@ func simulateGetHandler(tx *bolt.Tx, qdb *QuickDB) {
 }
 
 // Inserts a key into the database.
-func simulatePutHandler(tx *bolt.Tx, qdb *QuickDB) {
+func simulatePutHandler(tx *witchbolt.Tx, qdb *QuickDB) {
 	var err error
 	keys, value := randKeys(), randValue()
 

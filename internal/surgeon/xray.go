@@ -1,16 +1,16 @@
 package surgeon
 
-// Library contains raw access to bbolt files for sake of testing or fixing of corrupted files.
+// Library contains raw access to witchbolt files for sake of testing or fixing of corrupted files.
 //
-// The library must not be used bbolt btree - just by CLI or tests.
+// The library must not be used witchbolt btree - just by CLI or tests.
 // It's not optimized for performance.
 
 import (
 	"bytes"
 	"fmt"
 
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
 )
 
 type XRay struct {

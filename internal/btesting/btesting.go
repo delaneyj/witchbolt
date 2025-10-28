@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/delaneyj/witchbolt"
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
@@ -24,11 +24,11 @@ const (
 	TestEnableStrictMode = "TEST_ENABLE_STRICT_MODE"
 )
 
-// DB is a test wrapper for bolt.DB.
+// DB is a test wrapper for witchbolt.DB.
 type DB struct {
-	*bolt.DB
+	*witchbolt.DB
 	f string
-	o *bolt.Options
+	o *witchbolt.Options
 	t testing.TB
 }
 
@@ -38,32 +38,32 @@ func MustCreateDB(t testing.TB) *DB {
 }
 
 // MustCreateDBWithOption returns a new, open DB at a temporary location with given options.
-func MustCreateDBWithOption(t testing.TB, o *bolt.Options) *DB {
+func MustCreateDBWithOption(t testing.TB, o *witchbolt.Options) *DB {
 	f := filepath.Join(t.TempDir(), "db")
 	return MustOpenDBWithOption(t, f, o)
 }
 
-func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
+func MustOpenDBWithOption(t testing.TB, f string, o *witchbolt.Options) *DB {
 	db, err := OpenDBWithOption(t, f, o)
 	require.NoError(t, err)
 	require.NotNil(t, db)
 	return db
 }
 
-func OpenDBWithOption(t testing.TB, f string, o *bolt.Options) (*DB, error) {
-	t.Logf("Opening bbolt DB at: %s", f)
+func OpenDBWithOption(t testing.TB, f string, o *witchbolt.Options) (*DB, error) {
+	t.Logf("Opening witchbolt DB at: %s", f)
 	if o == nil {
-		o = bolt.DefaultOptions
+		o = witchbolt.DefaultOptions
 	}
 
-	freelistType := bolt.FreelistArrayType
-	if env := os.Getenv(TestFreelistType); env == string(bolt.FreelistMapType) {
-		freelistType = bolt.FreelistMapType
+	freelistType := witchbolt.FreelistArrayType
+	if env := os.Getenv(TestFreelistType); env == string(witchbolt.FreelistMapType) {
+		freelistType = witchbolt.FreelistMapType
 	}
 
 	o.FreelistType = freelistType
 
-	db, err := bolt.Open(f, 0600, o)
+	db, err := witchbolt.Open(f, 0600, o)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (db *DB) Close() error {
 		if *statsFlag {
 			db.PrintStats()
 		}
-		db.t.Logf("Closing bbolt DB at: %s", db.f)
+		db.t.Logf("Closing witchbolt DB at: %s", db.f)
 		err := db.DB.Close()
 		if err != nil {
 			return err
@@ -114,7 +114,7 @@ func (db *DB) MustDeleteFile() {
 	require.NoError(db.t, err)
 }
 
-func (db *DB) SetOptions(o *bolt.Options) {
+func (db *DB) SetOptions(o *witchbolt.Options) {
 	db.o = o
 }
 
@@ -123,8 +123,8 @@ func (db *DB) MustReopen() {
 	if db.DB != nil {
 		panic("Please call Close() before MustReopen()")
 	}
-	db.t.Logf("Reopening bbolt DB at: %s", db.f)
-	indb, err := bolt.Open(db.Path(), 0600, db.o)
+	db.t.Logf("Reopening witchbolt DB at: %s", db.f)
+	indb, err := witchbolt.Open(db.Path(), 0600, db.o)
 	require.NoError(db.t, err)
 	db.DB = indb
 	db.strictModeEnabledDefault()
@@ -132,7 +132,7 @@ func (db *DB) MustReopen() {
 
 // MustCheck runs a consistency check on the database and panics if any errors are found.
 func (db *DB) MustCheck() {
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *witchbolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {
@@ -171,7 +171,7 @@ func (db *DB) Fill(bucket []byte, numTx int, numKeysPerTx int,
 	keyGen func(tx int, key int) []byte,
 	valueGen func(tx int, key int) []byte) error {
 	for tr := 0; tr < numTx; tr++ {
-		err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *witchbolt.Tx) error {
 			b, _ := tx.CreateBucketIfNotExists(bucket)
 			for i := 0; i < numKeysPerTx; i++ {
 				if err := b.Put(keyGen(tr, i), valueGen(tr, i)); err != nil {
@@ -194,7 +194,7 @@ func (db *DB) Path() string {
 // CopyTempFile copies a database to a temporary file.
 func (db *DB) CopyTempFile() {
 	path := filepath.Join(db.t.TempDir(), "db.copy")
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *witchbolt.Tx) error {
 		return tx.CopyFile(path, 0600)
 	})
 	require.NoError(db.t, err)

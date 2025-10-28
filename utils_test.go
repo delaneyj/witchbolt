@@ -1,24 +1,24 @@
-package bbolt_test
+package witchbolt_test
 
 import (
-	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // `dumpBucket` dumps all the data, including both key/value data
 // and child buckets, from the source bucket into the target db file.
-func dumpBucket(srcBucketName []byte, srcBucket *bolt.Bucket, dstFilename string) error {
+func dumpBucket(srcBucketName []byte, srcBucket *witchbolt.Bucket, dstFilename string) error {
 	common.Assert(len(srcBucketName) != 0, "source bucket name can't be empty")
 	common.Assert(srcBucket != nil, "the source bucket can't be nil")
 	common.Assert(len(dstFilename) != 0, "the target file path can't be empty")
 
-	dstDB, err := bolt.Open(dstFilename, 0600, nil)
+	dstDB, err := witchbolt.Open(dstFilename, 0600, nil)
 	if err != nil {
 		return err
 	}
 	defer dstDB.Close()
 
-	return dstDB.Update(func(tx *bolt.Tx) error {
+	return dstDB.Update(func(tx *witchbolt.Tx) error {
 		dstBucket, err := tx.CreateBucket(srcBucketName)
 		if err != nil {
 			return err
@@ -27,7 +27,7 @@ func dumpBucket(srcBucketName []byte, srcBucket *bolt.Bucket, dstFilename string
 	})
 }
 
-func cloneBucket(src *bolt.Bucket, dst *bolt.Bucket) error {
+func cloneBucket(src *witchbolt.Bucket, dst *witchbolt.Bucket) error {
 	return src.ForEach(func(k, v []byte) error {
 		if v == nil {
 			srcChild := src.Bucket(k)

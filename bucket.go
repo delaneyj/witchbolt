@@ -1,12 +1,13 @@
-package bbolt
+package witchbolt
 
 import (
 	"bytes"
 	"fmt"
 	"unsafe"
 
-	"go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
 )
 
 const (
@@ -429,7 +430,7 @@ func (b *Bucket) recursivelyInspect(name []byte) BucketStructure {
 // Get retrieves the value for a key in the bucket.
 // Returns a nil value if the key does not exist or if the key is a nested bucket.
 // The returned value is only valid for the life of the transaction.
-// The returned memory is owned by bbolt and must never be modified; writing to this memory might corrupt the database.
+// The returned memory is owned by witchbolt and must never be modified; writing to this memory might corrupt the database.
 func (b *Bucket) Get(key []byte) []byte {
 	k, v, flags := b.Cursor().seek(key)
 
@@ -486,7 +487,7 @@ func (b *Bucket) Put(key []byte, value []byte) (err error) {
 		return errors.ErrIncompatibleValue
 	}
 
-	// gofail: var beforeBucketPut struct{}
+	fp.InjectStruct("beforeBucketPut")
 
 	c.node().put(newKey, newKey, value, 0, 0)
 

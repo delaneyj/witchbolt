@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // flock acquires an advisory lock on a file descriptor.

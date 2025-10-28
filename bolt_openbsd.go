@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 import (
 	"golang.org/x/sys/unix"

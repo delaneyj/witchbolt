@@ -1,11 +1,11 @@
-package bbolt
+package witchbolt
 
 import (
 	"bytes"
 	"fmt"
 	"sort"
 
-	"go.etcd.io/bbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/common"
 )
 
 // node represents an in-memory, deserialized page.

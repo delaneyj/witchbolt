@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 import (
 	"errors"
@@ -10,9 +10,10 @@ import (
 	"time"
 	"unsafe"
 
-	berrors "go.etcd.io/bbolt/errors"
-	"go.etcd.io/bbolt/internal/common"
-	fl "go.etcd.io/bbolt/internal/freelist"
+	berrors "github.com/delaneyj/witchbolt/errors"
+	"github.com/delaneyj/witchbolt/internal/common"
+	fp "github.com/delaneyj/witchbolt/internal/failpoint"
+	fl "github.com/delaneyj/witchbolt/internal/freelist"
 )
 
 // The time elapsed between consecutive file locking attempts.
@@ -74,7 +75,7 @@ type DB struct {
 	// https://github.com/boltdb/bolt/issues/284
 	NoGrowSync bool
 
-	// When `true`, bbolt will always load the free pages when opening the DB.
+	// When `true`, witchbolt will always load the free pages when opening the DB.
 	// When opening db in write mode, this flag will always automatically
 	// set to `true`.
 	PreLoadFreelist bool
@@ -142,10 +143,13 @@ type DB struct {
 	batchMu sync.Mutex
 	batch   *batch
 
-	rwlock   sync.Mutex   // Allows only one writer at a time.
-	metalock sync.Mutex   // Protects meta page access.
-	mmaplock sync.RWMutex // Protects mmap access during remapping.
-	statlock sync.RWMutex // Protects stats access.
+	rwlock               sync.Mutex   // Allows only one writer at a time.
+	metalock             sync.Mutex   // Protects meta page access.
+	mmaplock             sync.RWMutex // Protects mmap access during remapping.
+	statlock             sync.RWMutex // Protects stats access.
+	flushMu              sync.RWMutex
+	flushObservers       []PageFlushObserver
+	flushObserverClosers []func() error
 
 	ops struct {
 		writeAt func(b []byte, off int64) (n int, err error)
@@ -163,7 +167,7 @@ func (db *DB) Path() string {
 
 // GoString returns the Go string representation of the database.
 func (db *DB) GoString() string {
-	return fmt.Sprintf("bolt.DB{path:%q}", db.path)
+	return fmt.Sprintf("witchbolt.DB{path:%q}", db.path)
 }
 
 // String returns the string representation of the database.
@@ -213,9 +217,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 		lg.Infof("Opening db file (%s) with mode %s and with options: %s", path, mode, options)
 		defer func() {
 			if err != nil {
-				lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
+				lg.Errorf("Opening witchbolt db (%s) failed: %v", path, err)
 			} else {
-				lg.Infof("Opening bbolt db (%s) successfully", path)
+				lg.Infof("Opening witchbolt db (%s) successfully", path)
 			}
 		}()
 	}
@@ -319,6 +323,37 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 			lg.Errorf("starting readwrite transaction failed: %v", txErr)
 			_ = db.close()
 			return nil, txErr
+		}
+	}
+
+	if len(options.PageFlushObservers) > 0 {
+		for _, registration := range options.PageFlushObservers {
+			var observer PageFlushObserver
+			var err error
+			if registration.Start != nil {
+				observer, err = registration.Start(db)
+				if err != nil {
+					_ = db.close()
+					lg.Errorf("starting page flush observer failed: %v", err)
+					return nil, err
+				}
+			}
+			if observer == nil {
+				observer = registration.Observer
+			}
+			closeFn := registration.Close
+			if observer != nil {
+				db.RegisterPageFlushObserver(observer)
+				db.flushObserverClosers = append(db.flushObserverClosers, func() error {
+					db.UnregisterPageFlushObserver(observer)
+					if closeFn != nil {
+						return closeFn()
+					}
+					return nil
+				})
+			} else if closeFn != nil {
+				db.flushObserverClosers = append(db.flushObserverClosers, closeFn)
+			}
 		}
 	}
 
@@ -494,8 +529,9 @@ func (db *DB) mmap(minsz int) (err error) {
 	}
 
 	// Memory-map the data file as a byte slice.
-	// gofail: var mapError string
-	// return errors.New(mapError)
+	if msg, ok := fp.Inject("mapError"); ok {
+		return errors.New(msg)
+	}
 	if err = mmap(db, size); err != nil {
 		lg.Errorf("[GOOS: %s, GOARCH: %s] mmap failed, size: %d, error: %v", runtime.GOOS, runtime.GOARCH, size, err)
 		return err
@@ -548,8 +584,9 @@ func (db *DB) invalidate() {
 func (db *DB) munmap() error {
 	defer db.invalidate()
 
-	// gofail: var unmapError string
-	// return errors.New(unmapError)
+	if msg, ok := fp.Inject("unmapError"); ok {
+		return errors.New(msg)
+	}
 	if err := munmap(db); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munmap failed, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, db.datasz, err)
 		return fmt.Errorf("unmap error: %w", err)
@@ -596,8 +633,9 @@ func (db *DB) mmapSize(size int) (int, error) {
 }
 
 func (db *DB) munlock(fileSize int) error {
-	// gofail: var munlockError string
-	// return errors.New(munlockError)
+	if msg, ok := fp.Inject("munlockError"); ok {
+		return errors.New(msg)
+	}
 	if err := munlock(db, fileSize); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
 		return fmt.Errorf("munlock error: %w", err)
@@ -606,8 +644,9 @@ func (db *DB) munlock(fileSize int) error {
 }
 
 func (db *DB) mlock(fileSize int) error {
-	// gofail: var mlockError string
-	// return errors.New(mlockError)
+	if msg, ok := fp.Inject("mlockError"); ok {
+		return errors.New(msg)
+	}
 	if err := mlock(db, fileSize); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] mlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
 		return fmt.Errorf("mlock error: %w", err)
@@ -700,6 +739,16 @@ func (db *DB) close() error {
 	db.ops.writeAt = nil
 
 	var errs []error
+
+	for _, closeFn := range db.flushObserverClosers {
+		if closeFn != nil {
+			if err := closeFn(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	db.flushObserverClosers = nil
+	db.flushObservers = nil
 	// Close the mmap.
 	if err := db.munmap(); err != nil {
 		errs = append(errs, err)
@@ -711,7 +760,7 @@ func (db *DB) close() error {
 		if !db.readOnly {
 			// Unlock the file.
 			if err := funlock(db); err != nil {
-				errs = append(errs, fmt.Errorf("bolt.Close(): funlock error: %w", err))
+				errs = append(errs, fmt.Errorf("witchbolt.Close(): funlock error: %w", err))
 			}
 		}
 
@@ -770,6 +819,44 @@ func (db *DB) Logger() Logger {
 		return getDiscardLogger()
 	}
 	return db.logger
+}
+
+// RegisterPageFlushObserver registers an observer that is notified when dirty pages are flushed.
+// Passing nil clears all observers.
+func (db *DB) RegisterPageFlushObserver(observer PageFlushObserver) {
+	db.flushMu.Lock()
+	defer db.flushMu.Unlock()
+	if observer == nil {
+		db.flushObservers = nil
+		return
+	}
+	db.flushObservers = append(db.flushObservers, observer)
+}
+
+func (db *DB) getPageFlushObservers() []PageFlushObserver {
+	db.flushMu.RLock()
+	defer db.flushMu.RUnlock()
+	if len(db.flushObservers) == 0 {
+		return nil
+	}
+	observers := make([]PageFlushObserver, len(db.flushObservers))
+	copy(observers, db.flushObservers)
+	return observers
+}
+
+// UnregisterPageFlushObserver removes a previously registered observer.
+func (db *DB) UnregisterPageFlushObserver(observer PageFlushObserver) {
+	if observer == nil {
+		return
+	}
+	db.flushMu.Lock()
+	defer db.flushMu.Unlock()
+	for i, obs := range db.flushObservers {
+		if obs == observer {
+			db.flushObservers = append(db.flushObservers[:i], db.flushObservers[i+1:]...)
+			break
+		}
+	}
 }
 
 func (db *DB) beginTx() (*Tx, error) {
@@ -1077,12 +1164,12 @@ func safelyCall(fn func(*Tx) error, tx *Tx) (err error) {
 // then it allows you to force the database file to sync against the disk.
 func (db *DB) Sync() (err error) {
 	if lg := db.Logger(); lg != discardLogger {
-		lg.Debugf("Syncing bbolt db (%s)", db.path)
+		lg.Debugf("Syncing witchbolt db (%s)", db.path)
 		defer func() {
 			if err != nil {
-				lg.Errorf("[GOOS: %s, GOARCH: %s] syncing bbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
+				lg.Errorf("[GOOS: %s, GOARCH: %s] syncing witchbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
 			} else {
-				lg.Debugf("Syncing bbolt db (%s) successfully", db.path)
+				lg.Debugf("Syncing witchbolt db (%s) successfully", db.path)
 			}
 		}()
 	}
@@ -1141,7 +1228,7 @@ func (db *DB) meta() *common.Meta {
 
 	// This should never be reached, because both meta1 and meta0 were validated
 	// on mmap() and we do fsync() on every write.
-	panic("bolt.DB.meta(): invalid meta pages")
+	panic("witchbolt.DB.meta(): invalid meta pages")
 }
 
 // allocate returns a contiguous block of memory starting at a given page.
@@ -1212,8 +1299,9 @@ func (db *DB) grow(sz int) error {
 	// https://github.com/boltdb/bolt/issues/284
 	if !db.NoGrowSync && !db.readOnly {
 		if runtime.GOOS != "windows" {
-			// gofail: var resizeFileError string
-			// return errors.New(resizeFileError)
+			if msg, ok := fp.Inject("resizeFileError"); ok {
+				return errors.New(msg)
+			}
 			if err := db.file.Truncate(int64(sz)); err != nil {
 				lg.Errorf("[GOOS: %s, GOARCH: %s] truncating file failed, size: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, sz, db.datasz, err)
 				return fmt.Errorf("file resize error: %s", err)
@@ -1293,7 +1381,7 @@ type Options struct {
 	NoFreelistSync bool
 
 	// PreLoadFreelist sets whether to load the free pages when opening
-	// the db file. Note when opening db in write mode, bbolt will always
+	// the db file. Note when opening db in write mode, witchbolt will always
 	// load the free pages.
 	PreLoadFreelist bool
 
@@ -1324,7 +1412,7 @@ type Options struct {
 	// will be immediately resized to match `InitialMmapSize` (aligned to page size)
 	// when the DB is opened. On non-Windows platforms, the file size will grow
 	// dynamically based on the actual amount of written data, regardless of `InitialMmapSize`.
-	// Refer to https://github.com/etcd-io/bbolt/issues/378#issuecomment-1378121966.
+	// Refer to https://github.com/etcd-io/witchbolt/issues/378#issuecomment-1378121966.
 	InitialMmapSize int
 
 	// PageSize overrides the default OS page size.
@@ -1347,8 +1435,11 @@ type Options struct {
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
 
-	// Logger is the logger used for bbolt.
+	// Logger is the logger used for witchbolt.
 	Logger Logger
+
+	// PageFlushObservers registers observers that receive flushed page events.
+	PageFlushObservers []PageFlushObserverRegistration
 
 	// NoStatistics turns off statistics collection, Stats method will
 	// return empty structure in this case. This can be beneficial for
@@ -1361,8 +1452,8 @@ func (o *Options) String() string {
 		return "{}"
 	}
 
-	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p, NoStatistics: %t}",
-		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger, o.NoStatistics)
+	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p, PageFlushObservers: %d, NoStatistics: %t}",
+		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger, len(o.PageFlushObservers), o.NoStatistics)
 
 }
 
@@ -1379,7 +1470,7 @@ type Stats struct {
 	// Put `TxStats` at the first field to ensure it's 64-bit aligned. Note
 	// that the first word in an allocated struct can be relied upon to be
 	// 64-bit aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG.
-	// Also refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
+	// Also refer to discussion in https://github.com/etcd-io/witchbolt/issues/577.
 	TxStats TxStats // global, ongoing stats.
 
 	// Freelist stats

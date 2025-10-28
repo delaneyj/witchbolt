@@ -1,4 +1,4 @@
-package bbolt
+package witchbolt
 
 // mlock locks memory of db file
 func mlock(_ *DB, _ int) error {

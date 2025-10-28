@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/guts_cli"
-	"go.etcd.io/bbolt/internal/surgeon"
+	"github.com/delaneyj/witchbolt"
+	"github.com/delaneyj/witchbolt/internal/btesting"
+	"github.com/delaneyj/witchbolt/internal/guts_cli"
+	"github.com/delaneyj/witchbolt/internal/surgeon"
 )
 
 func TestFindPathsToKey(t *testing.T) {
@@ -44,7 +44,7 @@ func TestFindPathsToKey_Bucket(t *testing.T) {
 			func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
 			func(tx int, k int) []byte { return make([]byte, 100) },
 		))
-	require.NoError(t, db.Update(func(tx *bbolt.Tx) error {
+	require.NoError(t, db.Update(func(tx *witchbolt.Tx) error {
 		sb, err := tx.Bucket(rootBucket).CreateBucket(subBucket)
 		require.NoError(t, err)
 		require.NoError(t, sb.Put([]byte("foo"), []byte("bar")))

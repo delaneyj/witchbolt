@@ -1,10 +1,10 @@
-package bbolt
+package witchbolt
 
 import (
 	"testing"
 
-	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/freelist"
+	"github.com/delaneyj/witchbolt/internal/common"
+	"github.com/delaneyj/witchbolt/internal/freelist"
 )
 
 func TestTx_allocatePageStats(t *testing.T) {
